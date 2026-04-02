@@ -1,131 +1,188 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { useWarehouseAuth, API_BASE } from '../../../contexts/WarehouseAuthContext';
 import PageHeader from '../../../components/warehouse/PageHeader';
 
-const TABS = [
-  { id: 'kho-kho', label: 'Kho Khô' },
-  { id: 'kho-lanh', label: 'Kho Lạnh' },
-  { id: 'kho-de-vo', label: 'Kho Dễ Vỡ' },
-  { id: 'kho-hong', label: 'Kho Hỏng' },
-  { id: 'kho-khac', label: 'Kho Khác' },
-];
-
-const FEE_DATA: Record<string, { cols: string[]; rows: string[][] }> = {
-  'kho-kho': {
-    cols: ['Loại container', 'Phí lưu kho/ngày', 'Phí bốc xếp', 'Phí quản lý', 'Phí phạt trễ/ngày'],
-    rows: [
-      ['20ft Khô', '₫500K', '₫1.2M', '₫200K', '₫300K'],
-      ['40ft Khô', '₫850K', '₫2.0M', '₫350K', '₫500K'],
-      ['40ft HC', '₫950K', '₫2.2M', '₫400K', '₫550K'],
-    ],
-  },
-  'kho-lanh': {
-    cols: ['Loại container', 'Phí lưu kho/ngày', 'Phí điện/ngày', 'Phí bảo trì', 'Phí phạt trễ/ngày'],
-    rows: [
-      ['Reefer 20ft', '₫1.2M', '₫800K', '₫300K', '₫600K'],
-      ['Reefer 40ft', '₫1.8M', '₫1.2M', '₫500K', '₫900K'],
-    ],
-  },
-  'kho-de-vo': {
-    cols: ['Loại hàng', 'Phí lưu kho/ngày', 'Phí bảo hiểm', 'Phí bốc xếp đặc biệt', 'Phí phạt hỏng'],
-    rows: [
-      ['Thủy tinh / Gốm sứ', '₫700K', '₫400K', '₫1.5M', '₫5M/kiện'],
-      ['Thiết bị điện tử', '₫900K', '₫600K', '₫2M', '₫8M/kiện'],
-    ],
-  },
-  'kho-hong': {
-    cols: ['Loại hỏng', 'Phí lưu/ngày', 'Phí xử lý', 'Phí bồi thường tối thiểu'],
-    rows: [
-      ['Hỏng nhẹ (có thể sửa)', '₫300K', '₫2M', '₫1M'],
-      ['Hỏng nặng (không sửa được)', '₫500K', '₫5M', '₫10M'],
-    ],
-  },
-  'kho-khac': {
-    cols: ['Loại dịch vụ', 'Đơn giá', 'Phí phát sinh'],
-    rows: [
-      ['Phí cổng (Gate fee)', '₫200K/lượt', '₫50K'],
-      ['Phí kiểm tra hải quan', '₫500K/lần', '₫100K'],
-      ['Phí vệ sinh container', '₫300K', '₫100K'],
-    ],
-  },
+type FeeConfig = {
+  configId?: number;
+  currency?: string;
+  costRate?: number;
+  ratePerKgDefault?: number;
+  ratePerKgByCargoType?: Record<string, number>;
+  updatedAt?: string;
 };
 
 export default function QuanLyCuocPhi() {
-  const [tab, setTab] = useState('kho-kho');
-  const [open, setOpen] = useState(false);
-  const current = FEE_DATA[tab];
+  const { accessToken } = useWarehouseAuth();
+  const headers = useMemo(() => ({
+    'Content-Type': 'application/json',
+    ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+  }), [accessToken]);
+
+  const [config, setConfig] = useState<FeeConfig | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  const [editing, setEditing] = useState(false);
+  const [form, setForm] = useState({ currency: 'USD', costRate: '', ratePerKgDefault: '' });
+  const [saving, setSaving] = useState(false);
+  const [saveMsg, setSaveMsg] = useState('');
+
+  const fetchData = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const res = await fetch(`${API_BASE}/admin/fees`, { headers });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.message || 'Lỗi tải cấu hình phí');
+      setConfig(d.data);
+    } catch (e: any) {
+      setError(e.message || 'Lỗi không xác định');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { fetchData(); }, []);
+
+  const startEdit = () => {
+    if (!config) return;
+    setForm({
+      currency: config.currency || 'USD',
+      costRate: config.costRate != null ? String(config.costRate) : '',
+      ratePerKgDefault: config.ratePerKgDefault != null ? String(config.ratePerKgDefault) : '',
+    });
+    setSaveMsg('');
+    setEditing(true);
+  };
+
+  const handleSave = async () => {
+    setSaving(true);
+    setSaveMsg('');
+    try {
+      const body: Record<string, any> = {
+        currency: form.currency || 'USD',
+      };
+      if (form.costRate !== '') body.costRate = parseFloat(form.costRate);
+      if (form.ratePerKgDefault !== '') body.ratePerKgDefault = parseFloat(form.ratePerKgDefault);
+      const res = await fetch(`${API_BASE}/admin/fees`, { method: 'PUT', headers, body: JSON.stringify(body) });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.message || 'Lỗi cập nhật cấu hình');
+      setConfig(d.data);
+      setEditing(false);
+      setSaveMsg('Đã cập nhật cấu hình phí.');
+    } catch (e: any) {
+      setSaveMsg(e.message || 'Lỗi');
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
     <>
       <PageHeader
         title="Quản lý cước phí"
-        subtitle="Bảng tính cước phí theo từng loại kho"
+        subtitle="Cấu hình biểu phí lưu kho và phí theo loại hàng"
       />
 
-      <div className="tabs">
-        {TABS.map((item) => (
-          <button
-            key={item.id}
-            type="button"
-            className={`tab-btn${tab === item.id ? ' active' : ''}`}
-            onClick={() => setTab(item.id)}
-          >
-            {item.label}
-          </button>
-        ))}
-      </div>
+      {error && (
+        <div className="card" style={{ borderColor: 'var(--danger)', marginBottom: 12 }}>
+          <div style={{ color: 'var(--danger)' }}>{error}</div>
+          <button className="btn btn-secondary btn-sm" style={{ marginTop: 8 }} onClick={fetchData}>Thử lại</button>
+        </div>
+      )}
 
-      <div className="card">
-        <div className="card-header" style={{ justifyContent: 'space-between' }}>
-          <div>
-            <div className="card-title">Bảng cước phí {TABS.find((item) => item.id === tab)?.label}</div>
-            <div className="card-subtitle">Cập nhật mức phí theo loại trong kho</div>
-          </div>
-          <button type="button" className="btn btn-primary btn-sm" onClick={() => setOpen(true)}>+ Thêm mức phí</button>
+      {saveMsg && (
+        <div className="card" style={{ marginBottom: 12 }}>
+          <div style={{ color: 'var(--text2)', fontSize: 13 }}>{saveMsg}</div>
         </div>
-        <div className="table-wrap">
-          <table>
-            <thead>
-              <tr>{current.cols.map((col) => <th key={col}>{col}</th>)}</tr>
-            </thead>
-            <tbody>
-              {current.rows.map((row, index) => (
-                <tr key={index}>{row.map((cell, idx) => <td key={idx}>{cell}</td>)}</tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      )}
 
-      <div className={`modal-overlay${open ? ' open' : ''}`} onClick={(e) => e.target === e.currentTarget && setOpen(false)}>
-        <div className="modal">
-          <div className="modal-header">
-            <div className="modal-title">Thêm mức phí</div>
-            <button type="button" className="modal-close" onClick={() => setOpen(false)}>✕</button>
+      {loading ? (
+        <div className="card"><div style={{ padding: '24px', color: 'var(--text2)' }}>Đang tải...</div></div>
+      ) : config && (
+        <>
+          <div className="card">
+            <div className="card-header">
+              <div>
+                <div className="card-title">Cấu hình phí hiện tại</div>
+                {config.updatedAt && (
+                  <div className="card-subtitle">Cập nhật lần cuối: {new Date(config.updatedAt).toLocaleString('vi-VN')}</div>
+                )}
+              </div>
+              {!editing && (
+                <button type="button" className="btn btn-secondary btn-sm" onClick={startEdit}>✏ Chỉnh sửa</button>
+              )}
+            </div>
+
+            {!editing ? (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, padding: '8px 0' }}>
+                <div className="stat-card">
+                  <div>
+                    <div className="stat-label">Đơn vị tiền tệ</div>
+                    <div className="stat-value" style={{ fontSize: 22 }}>{config.currency || '—'}</div>
+                  </div>
+                </div>
+                <div className="stat-card">
+                  <div>
+                    <div className="stat-label">Phí cơ bản (cost rate)</div>
+                    <div className="stat-value" style={{ fontSize: 22 }}>{config.costRate != null ? config.costRate : '—'}</div>
+                  </div>
+                </div>
+                <div className="stat-card">
+                  <div>
+                    <div className="stat-label">Phí/kg mặc định</div>
+                    <div className="stat-value" style={{ fontSize: 22 }}>{config.ratePerKgDefault != null ? config.ratePerKgDefault : '—'}</div>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="form-row">
+                <div className="form-group">
+                  <label className="form-label">Đơn vị tiền tệ</label>
+                  <input className="form-input" value={form.currency} onChange={(e) => setForm((p) => ({ ...p, currency: e.target.value }))} />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Phí cơ bản (cost rate)</label>
+                  <input className="form-input" type="number" step="0.01" min="0" value={form.costRate} onChange={(e) => setForm((p) => ({ ...p, costRate: e.target.value }))} />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Phí/kg mặc định</label>
+                  <input className="form-input" type="number" step="0.01" min="0" value={form.ratePerKgDefault} onChange={(e) => setForm((p) => ({ ...p, ratePerKgDefault: e.target.value }))} />
+                </div>
+                <div className="form-actions" style={{ gridColumn: '1 / -1' }}>
+                  <button type="button" className="btn btn-secondary" onClick={() => setEditing(false)}>Hủy</button>
+                  <button type="button" className="btn btn-primary" onClick={handleSave} disabled={saving}>
+                    {saving ? 'Đang lưu...' : 'Lưu cấu hình'}
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
-          <div className="form-row">
-            <div className="form-group">
-              <label className="form-label">Loại container/hàng</label>
-              <input className="form-input" placeholder="VD: 20ft Standard" />
+
+          {config.ratePerKgByCargoType && Object.keys(config.ratePerKgByCargoType).length > 0 && (
+            <div className="card">
+              <div className="card-header">
+                <div className="card-title">Phí theo loại hàng</div>
+              </div>
+              <div className="table-wrap">
+                <table>
+                  <thead>
+                    <tr><th>Loại hàng</th><th>Phí/kg</th></tr>
+                  </thead>
+                  <tbody>
+                    {Object.entries(config.ratePerKgByCargoType).map(([type, rate]) => (
+                      <tr key={type}>
+                        <td>{type}</td>
+                        <td>{rate}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
-            <div className="form-group">
-              <label className="form-label">Phí lưu kho/ngày (₫)</label>
-              <input className="form-input" type="number" placeholder="500000" />
-            </div>
-            <div className="form-group">
-              <label className="form-label">Phí bốc xếp (₫)</label>
-              <input className="form-input" type="number" placeholder="1200000" />
-            </div>
-            <div className="form-group">
-              <label className="form-label">Phí phạt trễ/ngày (₫)</label>
-              <input className="form-input" type="number" placeholder="300000" />
-            </div>
-          </div>
-          <div className="form-actions">
-            <button type="button" className="btn btn-secondary" onClick={() => setOpen(false)}>Hủy</button>
-            <button type="button" className="btn btn-primary" onClick={() => { alert('Đã thêm mức phí!'); setOpen(false); }}>Thêm</button>
-          </div>
-        </div>
-      </div>
+          )}
+        </>
+      )}
     </>
   );
 }

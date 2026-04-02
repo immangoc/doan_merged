@@ -1,34 +1,57 @@
-import { useState } from 'react';
-import { CalendarDays, DollarSign, FileText, BarChart3 } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { CalendarDays, DollarSign, RefreshCw } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../../../components/ui/card';
 import { Input } from '../../../components/ui/input';
 import { Button } from '../../../components/ui/button';
 import WarehouseLayout from '../../../components/warehouse/WarehouseLayout';
+import { API_BASE } from '../../../contexts/WarehouseAuthContext';
 
-const rateTable = [
-  { service: 'Kho khô', unit: 'ft/ngày', price: '₫45K' },
-  { service: 'Kho lạnh', unit: 'ft/ngày', price: '₫75K' },
-  { service: 'Kho dễ vỡ', unit: 'ft/ngày', price: '₫95K' },
-  { service: 'Kho hỏng', unit: 'ft/ngày', price: '₫120K' },
-];
-
-const cargoTypes = ['Khô', 'Lạnh', 'Dễ vỡ', 'Hỏng', 'Khác'];
+type FeeConfig = {
+  dailyStorageRate: number;
+  overdueStorageRate: number;
+  freeStorageDays: number;
+};
 
 export default function Payments() {
+  const [feeConfig, setFeeConfig] = useState<FeeConfig | null>(null);
   const [startDate, setStartDate] = useState('');
-  const [endDate, setEndDate] = useState('');
-  const [cargoType, setCargoType] = useState('Khô');
-  const [result, setResult] = useState<string | null>(null);
+  const [endDate, setEndDate]     = useState('');
+  const [result, setResult]       = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch(`${API_BASE}/public/fee-config`)
+      .then((r) => r.json())
+      .then((d) => { if (d.data) setFeeConfig(d.data); })
+      .catch(() => {});
+  }, []);
 
   const handleLookup = () => {
     if (!startDate || !endDate) {
       setResult('Vui lòng chọn đủ ngày nhập và ngày xuất.');
       return;
     }
-    const days = Math.max(1, Math.round((new Date(endDate).getTime() - new Date(startDate).getTime()) / (1000 * 60 * 60 * 24)));
-    const baseRate = cargoType === 'Khô' ? 45 : cargoType === 'Lạnh' ? 75 : cargoType === 'Dễ vỡ' ? 95 : cargoType === 'Hỏng' ? 120 : 55;
-    setResult(`Ước tính: ${days} ngày × ${baseRate}K = ₫${days * baseRate}K`);
+    const totalDays = Math.max(1, Math.round(
+      (new Date(endDate).getTime() - new Date(startDate).getTime()) / (1000 * 60 * 60 * 24),
+    ));
+    if (feeConfig) {
+      const freeDays  = Math.min(totalDays, feeConfig.freeStorageDays);
+      const billDays  = Math.max(0, totalDays - feeConfig.freeStorageDays);
+      const fee       = billDays * feeConfig.dailyStorageRate;
+      setResult(
+        `${totalDays} ngày lưu kho · ${freeDays} ngày miễn phí · ${billDays} ngày tính phí × $${feeConfig.dailyStorageRate}/ngày = $${fee.toFixed(2)}`,
+      );
+    } else {
+      setResult(`Thời gian lưu kho: ${totalDays} ngày. Vui lòng liên hệ để biết chi phí cụ thể.`);
+    }
   };
+
+  const rateTable = feeConfig
+    ? [
+        { label: 'Miễn phí lưu trữ', value: `${feeConfig.freeStorageDays} ngày đầu` },
+        { label: 'Phí lưu trữ hàng ngày', value: `$${feeConfig.dailyStorageRate}/ngày` },
+        { label: 'Phí lưu trữ quá hạn', value: `$${feeConfig.overdueStorageRate}/ngày` },
+      ]
+    : null;
 
   return (
     <WarehouseLayout>
@@ -36,7 +59,7 @@ export default function Payments() {
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
             <h1 className="page-title">Tra cứu & tiện ích</h1>
-            <p className="page-subtitle">Tra cứu cước phí theo ngày nhập, ngày xuất và loại hàng.</p>
+            <p className="page-subtitle">Tra cứu cước phí theo ngày nhập, ngày xuất.</p>
           </div>
         </div>
 
@@ -60,19 +83,6 @@ export default function Payments() {
                 </div>
               </div>
 
-              <div>
-                <label className="form-label">Loại hàng</label>
-                <select
-                  value={cargoType}
-                  onChange={(e) => setCargoType(e.target.value)}
-                  className="form-input h-12"
-                >
-                  {cargoTypes.map((type) => (
-                    <option key={type} value={type}>{type}</option>
-                  ))}
-                </select>
-              </div>
-
               <Button className="w-full bg-blue-600 hover:bg-blue-700" onClick={handleLookup}>
                 Tra cứu
               </Button>
@@ -94,17 +104,20 @@ export default function Payments() {
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              {rateTable.map((item) => (
-                <div key={item.service} className="rounded-3xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-4">
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <p className="font-semibold text-gray-900 dark:text-white">{item.service}</p>
-                      <p className="text-sm text-gray-500 dark:text-gray-400">{item.unit}</p>
+              {!rateTable ? (
+                <div className="text-sm text-gray-400 text-center py-6">Đang tải biểu cước...</div>
+              ) : (
+                rateTable.map((item) => (
+                  <div key={item.label} className="rounded-3xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <p className="font-semibold text-gray-900 dark:text-white">{item.label}</p>
+                      </div>
+                      <div className="text-base font-semibold text-gray-900 dark:text-white">{item.value}</div>
                     </div>
-                    <div className="text-base font-semibold text-gray-900 dark:text-white">{item.price}</div>
                   </div>
-                </div>
-              ))}
+                ))
+              )}
             </CardContent>
           </Card>
         </div>
@@ -117,15 +130,17 @@ export default function Payments() {
             <div className="grid gap-4 md:grid-cols-3">
               <div className="rounded-3xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-4">
                 <div className="text-sm font-semibold text-gray-900 dark:text-white">Tra cứu cước phí</div>
-                <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">Nhập ngày nhập, ngày xuất và loại hàng để biết chi phí.</p>
+                <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">Nhập ngày nhập, ngày xuất để biết chi phí lưu kho.</p>
               </div>
               <div className="rounded-3xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-4">
-                <div className="text-sm font-semibold text-gray-900 dark:text-white">Biểu cước kho</div>
-                <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">Xem nhanh giá kho khô, lạnh, dễ vỡ và hỏng.</p>
+                <div className="text-sm font-semibold text-gray-900 dark:text-white">Miễn phí lưu trữ</div>
+                <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                  {feeConfig ? `${feeConfig.freeStorageDays} ngày đầu miễn phí kể từ ngày nhập kho.` : 'Xem bảng biểu cước bên trên.'}
+                </p>
               </div>
               <div className="rounded-3xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-4">
-                <div className="text-sm font-semibold text-gray-900 dark:text-white">Bảng giá nhanh</div>
-                <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">So sánh cước trước khi đặt booking.</p>
+                <div className="text-sm font-semibold text-gray-900 dark:text-white">Liên hệ hỗ trợ</div>
+                <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">Để được báo giá chính xác, vui lòng liên hệ bộ phận vận hành.</p>
               </div>
             </div>
           </CardContent>

@@ -3,8 +3,7 @@ import WarehouseLayout from '../../../../components/warehouse/WarehouseLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '../../../../components/ui/card';
 import { Button } from '../../../../components/ui/button';
 import { AlertCircle, RefreshCw, Shield } from 'lucide-react';
-import { useWarehouseAuth } from '../../../../contexts/WarehouseAuthContext';
-import { projectId, publicAnonKey } from '../../../../utils/supabase/info';
+import { useWarehouseAuth, API_BASE } from '../../../../contexts/WarehouseAuthContext';
 
 export default function AdminAuthSection() {
   const { user, accessToken } = useWarehouseAuth();
@@ -13,20 +12,20 @@ export default function AdminAuthSection() {
   const [apiError, setApiError] = useState<string>('');
   const [me, setMe] = useState<any | null>(null);
 
-  const apiUrl = `https://${projectId}.supabase.co/functions/v1/make-server-ce1eb60c`;
+  const apiUrl = API_BASE;
   const headers = {
     'Content-Type': 'application/json',
-    Authorization: `Bearer ${accessToken || publicAnonKey}`,
+    ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
   };
 
   const fetchMe = async () => {
     setLoading(true);
     setApiError('');
     try {
-      const res = await fetch(`${apiUrl}/auth/me`, { headers });
+      const res = await fetch(`${apiUrl}/users/me`, { headers });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Lỗi lấy thông tin xác thực');
-      setMe(data);
+      if (!res.ok) throw new Error(data.message || 'Lỗi lấy thông tin xác thực');
+      setMe(data.data);
     } catch (e: any) {
       setApiError(e.message || 'Lỗi không xác định');
     } finally {
@@ -81,7 +80,7 @@ export default function AdminAuthSection() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <RefreshCw className="w-5 h-5 text-blue-600" />
-                Kết quả gọi API `auth/me`
+                Kết quả gọi API `users/me`
               </CardTitle>
               <div className="mt-2">
                 <Button variant="outline" onClick={fetchMe} disabled={loading}>

@@ -10,14 +10,6 @@ import HungThuyLogo from '../../components/warehouse/HungThuyLogo';
 import { ImageWithFallback } from '../../components/figma/ImageWithFallback';
 import { useWarehouseAuth } from '../../contexts/WarehouseAuthContext';
 
-// Tài khoản demo — đã được tạo sẵn trong database khi server khởi động
-const DEMO_ACCOUNTS = [
-  { role: 'Admin',    label: 'Quản trị viên', email: 'admin@hungthuy.com',    color: 'border-red-300 bg-red-50 hover:bg-red-100',       dot: 'bg-red-500'    },
-  { role: 'Planner',  label: 'Điều độ kho',   email: 'planner@hungthuy.com',  color: 'border-blue-300 bg-blue-50 hover:bg-blue-100',     dot: 'bg-blue-500'   },
-  { role: 'Operator', label: 'Nhân viên kho',  email: 'operator@hungthuy.com', color: 'border-green-300 bg-green-50 hover:bg-green-100',  dot: 'bg-green-500'  },
-  { role: 'Customer', label: 'Khách hàng',     email: 'customer@hungthuy.com', color: 'border-purple-300 bg-purple-50 hover:bg-purple-100', dot: 'bg-purple-500' },
-];
-const DEMO_PASSWORD = 'Hungthuy@2025';
 
 export default function WarehouseLogin() {
   const [email,    setEmail]    = useState('');
@@ -47,12 +39,6 @@ export default function WarehouseLogin() {
     } finally {
       setLoading(false);
     }
-  };
-
-  const quickFill = (acc: typeof DEMO_ACCOUNTS[0]) => {
-    setEmail(acc.email);
-    setPassword(DEMO_PASSWORD);
-    setError('');
   };
 
   return (
@@ -121,31 +107,6 @@ export default function WarehouseLogin() {
 
             <CardContent className="px-6 pb-6 space-y-5">
 
-              {/* Tài khoản demo */}
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <div className="h-px flex-1 bg-gray-200 dark:bg-gray-700" />
-                  <span className="text-xs text-gray-400 font-medium px-2">Tài khoản demo — nhấn để tự điền</span>
-                  <div className="h-px flex-1 bg-gray-200 dark:bg-gray-700" />
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  {DEMO_ACCOUNTS.map(acc => (
-                    <button key={acc.role} type="button" onClick={() => quickFill(acc)}
-                      className={`text-left px-3 py-2.5 rounded-xl border-2 transition-all active:scale-95 cursor-pointer ${acc.color} ${email === acc.email ? 'ring-2 ring-blue-500 ring-offset-1 shadow-md' : ''}`}>
-                      <div className="flex items-center gap-1.5 mb-0.5">
-                        <span className={`w-2 h-2 rounded-full ${acc.dot}`} />
-                        <span className="text-xs font-bold text-gray-800">{acc.role}</span>
-                      </div>
-                      <div className="text-[10px] text-gray-500 truncate">{acc.email}</div>
-                      <div className="text-[10px] text-gray-400">{acc.label}</div>
-                    </button>
-                  ))}
-                </div>
-                <p className="text-[11px] text-center text-gray-400">
-                  Mật khẩu chung: <code className="bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded font-mono text-blue-600">{DEMO_PASSWORD}</code>
-                </p>
-              </div>
-
               {/* Form đăng nhập */}
               <form onSubmit={handleLogin} className="space-y-4">
                 <div className="space-y-1.5">
@@ -200,7 +161,7 @@ export default function WarehouseLogin() {
           </Card>
 
           <p className="text-center text-xs text-white/30 mt-4">
-            © 2025 Hùng Thủy Transport · Powered by Supabase Storage
+            © 2025 Hùng Thủy Transport
           </p>
         </motion.div>
       </div>

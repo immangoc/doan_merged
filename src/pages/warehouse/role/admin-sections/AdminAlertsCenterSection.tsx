@@ -1,261 +1,259 @@
 import { useEffect, useMemo, useState } from 'react';
-import { AlertCircle, Bell, CheckCircle2, Clock, RefreshCw, XCircle } from 'lucide-react';
+import { AlertCircle, AlertTriangle, Bell, CheckCircle2, Info } from 'lucide-react';
 import WarehouseLayout from '../../../../components/warehouse/WarehouseLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '../../../../components/ui/card';
 import { Button } from '../../../../components/ui/button';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../../../components/ui/table';
 import { Badge } from '../../../../components/ui/badge';
-import { useWarehouseAuth } from '../../../../contexts/WarehouseAuthContext';
-import { projectId, publicAnonKey } from '../../../../utils/supabase/info';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../../../components/ui/table';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../../../components/ui/select';
+import { useWarehouseAuth, API_BASE } from '../../../../contexts/WarehouseAuthContext';
 
-type ContainerItem = {
-  id: string;
-  status: 'pending' | 'in_storage' | 'exported';
+// ─── Types ───────────────────────────────────────────────────────────────────
+type AlertItem = {
+  alertId: number;
+  zoneId?: number;
+  zoneName?: string;
+  levelName: string;
+  description?: string;
+  createdAt?: string;
+  status: number; // 0 = OPEN, 1 = ACKNOWLEDGED
 };
 
-type Notification = {
-  id: string;
-  title: string;
-  message: string;
-  type: 'info' | 'warning' | 'error';
-  read: boolean;
-  archived: boolean;
-  created_at: string;
+const PAGE_SIZE = 20;
+
+const LEVEL_CLASS: Record<string, string> = {
+  CRITICAL: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300',
+  WARNING:  'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300',
+  INFO:     'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300',
 };
 
-function badgeClass(type: Notification['type']) {
-  switch (type) {
-    case 'warning':
-      return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-200';
-    case 'error':
-      return 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-200';
-    default:
-      return 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-200';
-  }
-}
+const LEVEL_ICON: Record<string, React.ElementType> = {
+  CRITICAL: AlertTriangle,
+  WARNING:  AlertCircle,
+  INFO:     Info,
+};
+
+const ALL = '__all__';
 
 export default function AdminAlertsCenterSection() {
   const { accessToken } = useWarehouseAuth();
-  const apiUrl = `https://${projectId}.supabase.co/functions/v1/make-server-ce1eb60c`;
-  const headers = {
-    'Content-Type': 'application/json',
-    Authorization: `Bearer ${accessToken || publicAnonKey}`,
-  };
+  const headers = useMemo(
+    () => ({
+      'Content-Type': 'application/json',
+      ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+    }),
+    [accessToken],
+  );
 
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [containers, setContainers] = useState<ContainerItem[]>([]);
-  const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [onlyWarnings, setOnlyWarnings] = useState(true);
+  const [loading, setLoading]   = useState(true);
+  const [error, setError]       = useState('');
+  const [items, setItems]       = useState<AlertItem[]>([]);
+  const [page, setPage]         = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalElements, setTotalElements] = useState(0);
 
-  const fetchAll = async () => {
+  // Filters
+  const [filterStatus,    setFilterStatus]    = useState<string>(ALL);
+  const [filterLevel,     setFilterLevel]     = useState<string>(ALL);
+
+  // Ack in-progress set
+  const [acking, setAcking] = useState<Set<number>>(new Set());
+
+  const fetchItems = async (p = page, status = filterStatus, level = filterLevel) => {
     setLoading(true);
     setError('');
     try {
-      const [cRes, nRes] = await Promise.all([
-        fetch(`${apiUrl}/containers`, { headers }),
-        fetch(`${apiUrl}/notifications?limit=200`, { headers }),
-      ]);
-      const cData = await cRes.json();
-      const nData = await nRes.json();
-      if (!cRes.ok) throw new Error(cData.error || 'Lỗi lấy containers');
-      if (!nRes.ok) throw new Error(nData.error || 'Lỗi lấy notifications');
-      setContainers(cData.containers || []);
-      setNotifications(nData.notifications || []);
+      const params = new URLSearchParams({ page: String(p), size: String(PAGE_SIZE) });
+      if (status !== ALL) params.set('status', status);
+      if (level  !== ALL) params.set('levelName', level);
+      const res  = await fetch(`${API_BASE}/admin/alerts?${params}`, { headers });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'Lỗi tải cảnh báo');
+      setItems(data.data?.content || []);
+      setTotalPages(data.data?.totalPages || 1);
+      setTotalElements(data.data?.totalElements || 0);
+      setPage(p);
     } catch (e: any) {
-      setError(e.message || 'Lỗi không xác định');
+      setError(e.message);
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchAll();
+    fetchItems(0);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const stats = useMemo(() => {
-    const pending = containers.filter((c) => c.status === 'pending').length;
-    const in_storage = containers.filter((c) => c.status === 'in_storage').length;
-    const exported = containers.filter((c) => c.status === 'exported').length;
-    return { pending, in_storage, exported };
-  }, [containers]);
+  const applyFilters = () => fetchItems(0, filterStatus, filterLevel);
 
-  const alertNotifications = useMemo(() => {
-    const base = notifications.filter((n) => !n.archived);
-    if (!onlyWarnings) return base;
-    return base.filter((n) => n.type === 'warning' || n.type === 'error');
-  }, [notifications, onlyWarnings]);
-
-  const handleResolve = async (n: Notification) => {
-    const res = await fetch(`${apiUrl}/notifications/${n.id}`, {
-      method: 'PATCH',
-      headers,
-      body: JSON.stringify({ archived: true, read: true }),
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Lỗi xử lý thông báo');
-    await fetchAll();
+  const acknowledge = async (alertId: number) => {
+    setAcking((prev) => new Set(prev).add(alertId));
+    try {
+      const res  = await fetch(`${API_BASE}/admin/alerts/${alertId}/acknowledge`, { method: 'PUT', headers });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'Lỗi xác nhận');
+      // Update local state
+      setItems((prev) =>
+        prev.map((a) => (a.alertId === alertId ? { ...a, status: 1 } : a)),
+      );
+    } catch (e: any) {
+      alert(e.message);
+    } finally {
+      setAcking((prev) => { const s = new Set(prev); s.delete(alertId); return s; });
+    }
   };
 
-  const toggleArchived = async (n: Notification) => {
-    const res = await fetch(`${apiUrl}/notifications/${n.id}`, {
-      method: 'PATCH',
-      headers,
-      body: JSON.stringify({ archived: !n.archived, read: true }),
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Lỗi cập nhật thông báo');
-    await fetchAll();
-  };
+  // Summary counts from current page (rough)
+  const openCount     = items.filter((a) => a.status === 0).length;
+  const criticalCount = items.filter((a) => a.levelName === 'CRITICAL' && a.status === 0).length;
 
   return (
     <WarehouseLayout>
       <div className="space-y-6">
         <div>
           <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Cảnh báo & Trung tâm thông báo</h1>
-          <p className="text-gray-600 dark:text-gray-400 mt-1">Kết hợp cảnh báo hệ thống và thông báo quản trị.</p>
+          <p className="text-gray-600 dark:text-gray-400 mt-1">
+            Quản lý và xác nhận cảnh báo hệ thống.
+            {totalElements > 0 && <span className="ml-1 text-sm">({totalElements} tổng)</span>}
+          </p>
+        </div>
+
+        {/* Summary badges */}
+        <div className="flex flex-wrap gap-3">
+          <div className="flex items-center gap-2 bg-red-50 dark:bg-red-900/20 border border-red-200 rounded-lg px-3 py-2">
+            <AlertTriangle className="w-4 h-4 text-red-600" />
+            <span className="text-sm font-medium text-red-700">{criticalCount} nghiêm trọng (trang này)</span>
+          </div>
+          <div className="flex items-center gap-2 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 rounded-lg px-3 py-2">
+            <Bell className="w-4 h-4 text-yellow-600" />
+            <span className="text-sm font-medium text-yellow-700">{openCount} chưa xử lý (trang này)</span>
+          </div>
         </div>
 
         {error && (
           <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 rounded-lg p-4 flex items-center gap-2 text-red-700 dark:text-red-300">
-            <AlertCircle className="w-5 h-5" />
-            <span className="flex-1">{error}</span>
-            <Button size="sm" variant="outline" onClick={fetchAll} disabled={loading}>
-              Thử lại
-            </Button>
+            <AlertCircle className="w-4 h-4 flex-shrink-0" />
+            <span className="flex-1 text-sm">{error}</span>
+            <Button size="sm" variant="outline" onClick={() => fetchItems(page)} disabled={loading}>Thử lại</Button>
           </div>
         )}
-
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Clock className="w-5 h-5 text-yellow-600" />
-                Chờ xử lý
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-4xl font-bold text-gray-900 dark:text-white">{stats.pending}</div>
-              <div className="text-sm text-gray-600 dark:text-gray-400 mt-1">Container đang ở trạng thái `pending`.</div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Bell className="w-5 h-5 text-blue-600" />
-                Trong kho
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-4xl font-bold text-gray-900 dark:text-white">{stats.in_storage}</div>
-              <div className="text-sm text-gray-600 dark:text-gray-400 mt-1">Container đang ở trạng thái `in_storage`.</div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <CheckCircle2 className="w-5 h-5 text-green-600" />
-                Đã xuất
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-4xl font-bold text-gray-900 dark:text-white">{stats.exported}</div>
-              <div className="text-sm text-gray-600 dark:text-gray-400 mt-1">Container đã được đánh dấu `exported`.</div>
-            </CardContent>
-          </Card>
-        </div>
 
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <Bell className="w-5 h-5 text-blue-600" />
-              Trung tâm thông báo ({alertNotifications.length})
+              <Bell className="w-5 h-5 text-yellow-500" />
+              Danh sách cảnh báo
             </CardTitle>
 
-            <div className="mt-3 flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
-              <div className="flex items-center gap-3">
-                <Button
-                  variant={onlyWarnings ? 'default' : 'outline'}
-                  className={onlyWarnings ? 'bg-yellow-500 hover:bg-yellow-600 text-black' : ''}
-                  onClick={() => setOnlyWarnings(true)}
-                >
-                  Chỉ cảnh báo
-                </Button>
-                <Button
-                  variant={!onlyWarnings ? 'default' : 'outline'}
-                  className={!onlyWarnings ? 'bg-blue-600 hover:bg-blue-700 text-white' : ''}
-                  onClick={() => setOnlyWarnings(false)}
-                >
-                  Tất cả
-                </Button>
+            {/* Filters */}
+            <div className="mt-3 flex flex-wrap gap-3 items-end">
+              <div>
+                <label className="text-xs text-gray-500">Trạng thái</label>
+                <Select value={filterStatus} onValueChange={setFilterStatus}>
+                  <SelectTrigger className="w-36"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={ALL}>Tất cả</SelectItem>
+                    <SelectItem value="0">Chưa xử lý</SelectItem>
+                    <SelectItem value="1">Đã xác nhận</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
-              <Button variant="outline" onClick={fetchAll} disabled={loading}>
-                <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-                Làm mới
-              </Button>
+              <div>
+                <label className="text-xs text-gray-500">Mức độ</label>
+                <Select value={filterLevel} onValueChange={setFilterLevel}>
+                  <SelectTrigger className="w-36"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={ALL}>Tất cả</SelectItem>
+                    <SelectItem value="CRITICAL">CRITICAL</SelectItem>
+                    <SelectItem value="WARNING">WARNING</SelectItem>
+                    <SelectItem value="INFO">INFO</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <Button onClick={applyFilters} disabled={loading}>Lọc</Button>
+              <Button variant="outline" onClick={() => fetchItems(page)} disabled={loading}>Làm mới</Button>
             </div>
           </CardHeader>
+
           <CardContent>
-            {loading ? (
-              <div className="py-10 text-gray-600 dark:text-gray-400">Đang tải...</div>
-            ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Tiêu đề</TableHead>
-                    <TableHead>Loại</TableHead>
-                    <TableHead>Nội dung</TableHead>
-                    <TableHead>Thời gian</TableHead>
-                    <TableHead className="text-right">Thao tác</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {alertNotifications.map((n) => (
-                    <TableRow key={n.id}>
-                      <TableCell className="font-semibold">{n.title}</TableCell>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>ID</TableHead>
+                  <TableHead>Mức độ</TableHead>
+                  <TableHead>Mô tả</TableHead>
+                  <TableHead>Khu vực</TableHead>
+                  <TableHead>Thời gian</TableHead>
+                  <TableHead>Trạng thái</TableHead>
+                  <TableHead className="text-right">Thao tác</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {loading ? (
+                  <TableRow><TableCell colSpan={7} className="text-center py-10 text-gray-500">Đang tải...</TableCell></TableRow>
+                ) : items.length === 0 ? (
+                  <TableRow><TableCell colSpan={7} className="text-center py-10 text-gray-400">Không có cảnh báo</TableCell></TableRow>
+                ) : items.map((item) => {
+                  const LevelIcon = LEVEL_ICON[item.levelName] || Bell;
+                  return (
+                    <TableRow
+                      key={item.alertId}
+                      className={item.status === 0 ? '' : 'opacity-60'}
+                    >
+                      <TableCell className="text-gray-400 text-sm">{item.alertId}</TableCell>
                       <TableCell>
-                        <Badge className={badgeClass(n.type)}>{n.type}</Badge>
+                        <Badge className={LEVEL_CLASS[item.levelName] || 'bg-gray-100 text-gray-600'}>
+                          <LevelIcon className="w-3 h-3 mr-1 inline" />
+                          {item.levelName}
+                        </Badge>
                       </TableCell>
-                      <TableCell className="max-w-[360px] truncate">{n.message}</TableCell>
-                      <TableCell className="text-sm text-gray-500 whitespace-nowrap">
-                        {new Date(n.created_at).toLocaleString('vi-VN')}
+                      <TableCell className="max-w-xs truncate">{item.description || '—'}</TableCell>
+                      <TableCell className="text-sm text-gray-500">
+                        {item.zoneName ? (
+                          <span>{item.zoneName}</span>
+                        ) : item.zoneId ? (
+                          <span className="text-gray-400">Zone #{item.zoneId}</span>
+                        ) : '—'}
+                      </TableCell>
+                      <TableCell className="text-sm text-gray-500">
+                        {item.createdAt ? new Date(item.createdAt).toLocaleString('vi-VN') : '—'}
+                      </TableCell>
+                      <TableCell>
+                        {item.status === 0 ? (
+                          <Badge className="bg-yellow-100 text-yellow-700">Chưa xử lý</Badge>
+                        ) : (
+                          <Badge className="bg-green-100 text-green-700">
+                            <CheckCircle2 className="w-3 h-3 mr-1 inline" />Đã xác nhận
+                          </Badge>
+                        )}
                       </TableCell>
                       <TableCell className="text-right">
-                        <div className="inline-flex items-center gap-2">
+                        {item.status === 0 && (
                           <Button
                             size="sm"
                             variant="outline"
-                            className="border-green-300 text-green-700 hover:bg-green-50"
-                            onClick={() => handleResolve(n)}
+                            className="text-green-700 border-green-300 hover:bg-green-50"
+                            onClick={() => acknowledge(item.alertId)}
+                            disabled={acking.has(item.alertId)}
                           >
-                            <CheckCircle2 className="w-4 h-4 mr-2" />
-                            Đã xử lý
+                            <CheckCircle2 className="w-4 h-4 mr-1" />
+                            {acking.has(item.alertId) ? '...' : 'Xác nhận'}
                           </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="border-red-300 text-red-700 hover:bg-red-50"
-                            onClick={() => toggleArchived(n)}
-                          >
-                            <XCircle className="w-4 h-4 mr-2" />
-                            Lưu / bỏ
-                          </Button>
-                        </div>
+                        )}
                       </TableCell>
                     </TableRow>
-                  ))}
-                  {alertNotifications.length === 0 && (
-                    <TableRow>
-                      <TableCell colSpan={5} className="text-center text-gray-500 py-10">
-                        Không có thông báo phù hợp.
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
+                  );
+                })}
+              </TableBody>
+            </Table>
+
+            {totalPages > 1 && (
+              <div className="flex items-center justify-center gap-2 mt-4">
+                <Button variant="outline" size="sm" onClick={() => fetchItems(page - 1)} disabled={page === 0 || loading}>Trước</Button>
+                <span className="text-sm text-gray-600">Trang {page + 1} / {totalPages}</span>
+                <Button variant="outline" size="sm" onClick={() => fetchItems(page + 1)} disabled={page >= totalPages - 1 || loading}>Sau</Button>
+              </div>
             )}
           </CardContent>
         </Card>
@@ -263,4 +261,3 @@ export default function AdminAlertsCenterSection() {
     </WarehouseLayout>
   );
 }
-

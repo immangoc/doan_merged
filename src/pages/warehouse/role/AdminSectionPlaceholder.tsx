@@ -14,6 +14,15 @@ import AdminSchedulesSection from './admin-sections/AdminSchedulesSection';
 import AdminShippingCompaniesSection from './admin-sections/AdminShippingCompaniesSection';
 import AdminFeesSection from './admin-sections/AdminFeesSection';
 import AdminPermissionsSection from './admin-sections/AdminPermissionsSection';
+import AdminUsersSection from './admin-sections/AdminUsersSection';
+import AdminOrdersSection from './admin-sections/AdminOrdersSection';
+import AdminContainersSection from './admin-sections/AdminContainersSection';
+import AdminGateInSection from './admin-sections/AdminGateInSection';
+import AdminGateOutSection from './admin-sections/AdminGateOutSection';
+import AdminYardSection from './admin-sections/AdminYardSection';
+import AdminBillsSection from './admin-sections/AdminBillsSection';
+import AdminStorageInvoicesSection from './admin-sections/AdminStorageInvoicesSection';
+import AdminDashboardSection from './admin-sections/AdminDashboardSection';
 import AdminCustomerStatusSection from './admin-sections/AdminCustomerStatusSection';
 import AdminAccountMergedSection from './admin-sections/AdminAccountMergedSection';
 import AdminReportsMergedSection from './admin-sections/AdminReportsMergedSection';
@@ -39,6 +48,15 @@ const TITLE_BY_SLUG: Record<string, string> = {
   'quan-ly-hang-tau': 'Quản lý Hãng tàu',
   'quan-ly-khach-hang-tam-ngung': 'Quản lý Khách hàng (tạm ngưng hoạt động)',
   'quan-ly-cuoc-phi-bieu-cuoc': 'Quản lý cước phí (Cấu hình biểu cước)',
+  'quan-ly-nguoi-dung': 'Quản lý người dùng',
+  'quan-ly-don-hang': 'Quản lý đơn hàng',
+  'quan-ly-container': 'Quản lý container',
+  'gate-in': 'Gate-In',
+  'gate-out': 'Gate-Out',
+  'quan-ly-bai-o-chua': 'Quản lý bãi & ô chứa',
+  'van-don': 'Vận đơn (Bill of Lading)',
+  'phi-luu-kho': 'Phí lưu kho',
+  'dashboard': 'Dashboard',
   'duyet-tai-khoan-khach-hang': 'Duyệt tài khoản khách hàng',
   'quan-ly-phan-quyen': 'Quản lý phân quyền',
   'quan-ly-tai-khoan': 'Quản lý tài khoản',
@@ -71,18 +89,30 @@ export default function AdminSectionPlaceholder() {
   if (slug === 'quan-ly-hang-tau') return <AdminShippingCompaniesSection />;
   if (slug === 'quan-ly-cuoc-phi-bieu-cuoc') return <AdminFeesSection />;
   if (slug === 'quan-ly-phan-quyen') return <AdminPermissionsSection />;
+  if (slug === 'quan-ly-nguoi-dung') return <AdminUsersSection />;
+  if (slug === 'quan-ly-don-hang') return <AdminOrdersSection />;
+  if (slug === 'quan-ly-container') return <AdminContainersSection />;
+  if (slug === 'gate-in') return <AdminGateInSection />;
+  if (slug === 'gate-out') return <AdminGateOutSection />;
+  if (slug === 'quan-ly-bai-o-chua') return <AdminYardSection />;
+  if (slug === 'van-don') return <AdminBillsSection />;
+  if (slug === 'phi-luu-kho') return <AdminStorageInvoicesSection />;
+  if (slug === 'dashboard') return <AdminDashboardSection />;
 
   if (slug === 'quan-ly-khach-hang-tam-ngung') return <AdminCustomerStatusSection mode="suspend" />;
   if (slug === 'duyet-tai-khoan-khach-hang') return <AdminCustomerStatusSection mode="approve" />;
 
-  if (slug === 'xuat-bao-cao') return <AdminReportsSection mode="export_report" />;
-  if (slug === 'bao-cao-thong-ke-doanh-thu-loi-nhuan') return <AdminReportsSection mode="revenue_profit" />;
-  if (slug === 'bieu-do-hieu-suat-toi-uu') return <AdminReportsSection mode="performance" />;
-  if (slug === 'bao-cao-thong-ke-ton-kho') return <AdminReportsSection mode="inventory" />;
-  if (slug === 'bao-cao-thong-ke-khach-hang') return <AdminReportsSection mode="customer_stats" />;
+  // All report slugs → unified AdminReportsSection
+  if (
+    slug === 'xuat-bao-cao' ||
+    slug === 'bao-cao-thong-ke-doanh-thu-loi-nhuan' ||
+    slug === 'bieu-do-hieu-suat-toi-uu' ||
+    slug === 'bao-cao-thong-ke-ton-kho' ||
+    slug === 'bao-cao-thong-ke-khach-hang' ||
+    slug === 'bao-cao-thong-ke'
+  ) return <AdminReportsSection />;
 
   if (slug === 'quan-ly-tai-khoan') return <AdminAccountMergedSection />;
-  if (slug === 'bao-cao-thong-ke') return <AdminReportsMergedSection />;
   if (slug === 'quan-tri-he-thong') return <AdminSystemMergedSection />;
 
   // Fallback (không có cấu hình)

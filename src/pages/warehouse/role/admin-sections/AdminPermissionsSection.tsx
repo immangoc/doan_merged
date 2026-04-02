@@ -5,23 +5,25 @@ import { Card, CardContent, CardHeader, CardTitle } from '../../../../components
 import { Button } from '../../../../components/ui/button';
 import { Input } from '../../../../components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../../../components/ui/table';
-import { useWarehouseAuth } from '../../../../contexts/WarehouseAuthContext';
-import { projectId, publicAnonKey } from '../../../../utils/supabase/info';
+import { useWarehouseAuth, API_BASE } from '../../../../contexts/WarehouseAuthContext';
 
-type Permissions = {
-  id?: string;
-  roles: Record<string, string[]>;
-  updated_at?: string;
-};
+const STORAGE_KEY = 'ht_permissions';
 
-const DEFAULT_ROLES = ['admin', 'planner', 'operator', 'customer'];
+function loadPermsFromStorage(): Record<string, string[]> {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+}
 
 export default function AdminPermissionsSection({ showLayout = true }: { showLayout?: boolean }) {
   const { accessToken } = useWarehouseAuth();
-  const apiUrl = `https://${projectId}.supabase.co/functions/v1/make-server-ce1eb60c`;
+  const apiUrl = API_BASE;
   const headers = {
     'Content-Type': 'application/json',
-    Authorization: `Bearer ${accessToken || publicAnonKey}`,
+    ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
   };
 
   const [loading, setLoading] = useState(true);
@@ -35,15 +37,14 @@ export default function AdminPermissionsSection({ showLayout = true }: { showLay
     setLoading(true);
     setError('');
     try {
-      const res = await fetch(`${apiUrl}/permissions`, { headers });
+      const res = await fetch(`${apiUrl}/admin/roles`, { headers });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Lỗi lấy phân quyền');
-      const perms: Permissions | null = data.permissions || null;
+      if (!res.ok) throw new Error(data.message || 'Lỗi lấy danh sách vai trò');
+      const roleList: { roleId: number; roleName: string }[] = data.data || [];
+      const saved = loadPermsFromStorage();
       const initial: Record<string, string[]> = {};
-      for (const r of DEFAULT_ROLES) initial[r] = perms?.roles?.[r] || [];
-      // giữ thêm role lạ nếu có
-      for (const [k, v] of Object.entries(perms?.roles || {})) {
-        if (!initial[k]) initial[k] = v;
+      for (const r of roleList) {
+        initial[r.roleName] = saved[r.roleName] || [];
       }
       setRoles(initial);
     } catch (e: any) {
@@ -58,25 +59,13 @@ export default function AdminPermissionsSection({ showLayout = true }: { showLay
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const save = async () => {
+  const save = () => {
+    setSaving(true);
     try {
-      setSaving(true);
-      setError('');
-      const payload: Permissions = {
-        id: 'default',
-        roles,
-      };
-      const res = await fetch(`${apiUrl}/permissions`, {
-        method: 'PUT',
-        headers,
-        body: JSON.stringify(payload),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Lỗi cập nhật phân quyền');
-      await fetchPerms();
-      alert('Cập nhật phân quyền thành công');
-    } catch (e: any) {
-      setError(e.message || 'Lỗi không xác định');
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(roles));
+      alert('Cập nhật phân quyền thành công (lưu cục bộ)');
+    } catch {
+      // ignore
     } finally {
       setSaving(false);
     }

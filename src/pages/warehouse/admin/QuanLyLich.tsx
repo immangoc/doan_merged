@@ -1,102 +1,259 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { useWarehouseAuth, API_BASE } from '../../../contexts/WarehouseAuthContext';
 import PageHeader from '../../../components/warehouse/PageHeader';
 
-const HANG_TAU_LIST = [
-  { ma: 'HT-001', ten: 'Maersk Line' },
-  { ma: 'HT-002', ten: 'Mediterranean Shipping (MSC)' },
-  { ma: 'HT-003', ten: 'COSCO Shipping' },
-  { ma: 'HT-005', ten: 'Vietnam Ocean Shipping (VOSCO)' },
-];
+type Schedule = {
+  scheduleId: number;
+  companyName?: string;
+  shipName?: string;
+  type?: string;
+  timeStart?: string;
+  timeEnd?: string;
+  location?: string;
+  containers?: number;
+  status?: string;
+  createdAt?: string;
+};
 
-const INIT_DATA = [
-  { ma: 'LT-2026-01', hangTau: 'Maersk Line', tuyen: 'TP.HCM → Singapore', ngayDi: '05/04/2026', ngayDen: '07/04/2026', tt: 'Sắp khởi hành', badge: 'badge-info' },
-  { ma: 'LT-2026-02', hangTau: 'MSC', tuyen: 'Hải Phòng → Rotterdam', ngayDi: '10/04/2026', ngayDen: '25/04/2026', tt: 'Sắp khởi hành', badge: 'badge-info' },
-  { ma: 'LT-2026-03', hangTau: 'COSCO Shipping', tuyen: 'TP.HCM → Thượng Hải', ngayDi: '15/04/2026', ngayDen: '18/04/2026', tt: 'Chờ xác nhận', badge: 'badge-warning' },
-  { ma: 'LT-2026-04', hangTau: 'VOSCO', tuyen: 'TP.HCM → Đà Nẵng', ngayDi: '20/03/2026', ngayDen: '21/03/2026', tt: 'Hoàn thành', badge: 'badge-success' },
-  { ma: 'LT-2026-05', hangTau: 'Maersk Line', tuyen: 'TP.HCM → Busan', ngayDi: '01/03/2026', ngayDen: '04/03/2026', tt: 'Hoàn thành', badge: 'badge-success' },
-];
+type ScheduleForm = {
+  companyName: string;
+  shipName: string;
+  type: string;
+  timeStart: string;
+  timeEnd: string;
+  location: string;
+  containers: string;
+  status: string;
+};
+
+const EMPTY_FORM: ScheduleForm = {
+  companyName: '', shipName: '', type: 'IMPORT',
+  timeStart: '', timeEnd: '', location: '',
+  containers: '', status: 'SCHEDULED',
+};
 
 export default function QuanLyLich() {
-  const [data, setData] = useState(INIT_DATA);
+  const { accessToken } = useWarehouseAuth();
+  const headers = useMemo(() => ({
+    'Content-Type': 'application/json',
+    ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+  }), [accessToken]);
+
+  const [data, setData] = useState<Schedule[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({ ma: '', hangTau: HANG_TAU_LIST[0].ten, tuyen: '', ngayDi: '', ngayDen: '' });
+  const [editItem, setEditItem] = useState<Schedule | null>(null);
+  const [form, setForm] = useState<ScheduleForm>(EMPTY_FORM);
+  const [saving, setSaving] = useState(false);
+  const [formError, setFormError] = useState('');
 
-  const setField = (key: keyof typeof form, value: string) => setForm((prev) => ({ ...prev, [key]: value }));
+  const fetchData = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const res = await fetch(`${API_BASE}/admin/schedules`, { headers });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.message || 'Lỗi tải dữ liệu');
+      setData(d.data || []);
+    } catch (e: any) {
+      setError(e.message || 'Lỗi không xác định');
+    } finally {
+      setLoading(false);
+    }
+  };
 
-  const handleAdd = () => {
-    if (!form.ma || !form.tuyen || !form.ngayDi || !form.ngayDen) {
-      alert('Vui lòng nhập đầy đủ thông tin!');
+  useEffect(() => { fetchData(); }, []);
+
+  const openAdd = () => {
+    setEditItem(null);
+    setForm(EMPTY_FORM);
+    setFormError('');
+    setOpen(true);
+  };
+
+  const openEdit = (item: Schedule) => {
+    setEditItem(item);
+    setForm({
+      companyName: item.companyName || '',
+      shipName: item.shipName || '',
+      type: item.type || 'IMPORT',
+      timeStart: item.timeStart ? item.timeStart.slice(0, 16) : '',
+      timeEnd: item.timeEnd ? item.timeEnd.slice(0, 16) : '',
+      location: item.location || '',
+      containers: item.containers != null ? String(item.containers) : '',
+      status: item.status || 'SCHEDULED',
+    });
+    setFormError('');
+    setOpen(true);
+  };
+
+  const closeModal = () => { setOpen(false); setEditItem(null); setFormError(''); };
+
+  const setField = (key: keyof ScheduleForm, value: string) =>
+    setForm((prev) => ({ ...prev, [key]: value }));
+
+  const handleSave = async () => {
+    if (!form.companyName.trim() && !form.shipName.trim()) {
+      setFormError('Vui lòng nhập ít nhất tên hãng tàu hoặc tên tàu!');
       return;
     }
-    setData((prev) => [...prev, { ...form, tt: 'Chờ xác nhận', badge: 'badge-warning' }]);
-    setForm({ ma: '', hangTau: HANG_TAU_LIST[0].ten, tuyen: '', ngayDi: '', ngayDen: '' });
-    setOpen(false);
+    setSaving(true);
+    setFormError('');
+    try {
+      const url = editItem
+        ? `${API_BASE}/admin/schedules/${editItem.scheduleId}`
+        : `${API_BASE}/admin/schedules`;
+      const method = editItem ? 'PUT' : 'POST';
+      const body: Record<string, any> = {
+        companyName: form.companyName || undefined,
+        shipName: form.shipName || undefined,
+        type: form.type || undefined,
+        location: form.location || undefined,
+        status: form.status || undefined,
+      };
+      if (form.timeStart) body.timeStart = form.timeStart;
+      if (form.timeEnd) body.timeEnd = form.timeEnd;
+      if (form.containers) body.containers = parseInt(form.containers, 10);
+
+      const res = await fetch(url, { method, headers, body: JSON.stringify(body) });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.message || 'Lỗi lưu dữ liệu');
+      closeModal();
+      fetchData();
+    } catch (e: any) {
+      setFormError(e.message || 'Lỗi');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = async (item: Schedule) => {
+    if (!window.confirm(`Xác nhận xóa lịch trình này?`)) return;
+    try {
+      const res = await fetch(`${API_BASE}/admin/schedules/${item.scheduleId}`, { method: 'DELETE', headers });
+      if (!res.ok) {
+        const d = await res.json();
+        throw new Error(d.message || 'Lỗi xóa');
+      }
+      fetchData();
+    } catch (e: any) {
+      setError(e.message || 'Lỗi xóa');
+    }
   };
 
   return (
     <>
       <PageHeader
-        title="Lịch trình tàu"
-        subtitle="Quản lý lịch trình vận chuyển container"
-        action={<button type="button" className="btn btn-primary" onClick={() => setOpen(true)}>+ Thêm lịch trình</button>}
+        title="Quản lý lịch trình"
+        subtitle="Lịch tàu, lịch nhập/xuất container"
+        action={<button type="button" className="btn btn-primary" onClick={openAdd}>+ Thêm lịch trình</button>}
       />
 
-      <div className="card">
-        <div className="table-wrap">
-          <table>
-            <thead>
-              <tr><th>Mã lịch</th><th>Hãng tàu</th><th>Tuyến đường</th><th>Ngày khởi hành</th><th>Ngày đến dự kiến</th><th>Trạng thái</th><th>Thao tác</th></tr>
-            </thead>
-            <tbody>
-              {data.map((row) => (
-                <tr key={row.ma}>
-                  <td><code>{row.ma}</code></td>
-                  <td>{row.hangTau}</td>
-                  <td>{row.tuyen}</td>
-                  <td>{row.ngayDi}</td>
-                  <td>{row.ngayDen}</td>
-                  <td><span className={`badge ${row.badge}`}>{row.tt}</span></td>
-                  <td><button type="button" className="btn btn-secondary btn-sm">✏ Sửa</button></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      {error && (
+        <div className="card" style={{ borderColor: 'var(--danger)', marginBottom: 12 }}>
+          <div style={{ color: 'var(--danger)' }}>{error}</div>
         </div>
+      )}
+
+      <div className="card">
+        {loading ? (
+          <div style={{ padding: '24px', color: 'var(--text2)' }}>Đang tải...</div>
+        ) : (
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>ID</th><th>Hãng tàu</th><th>Tên tàu</th><th>Loại</th>
+                  <th>Thời gian bắt đầu</th><th>Trạng thái</th><th>Thao tác</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.length === 0 ? (
+                  <tr><td colSpan={7} style={{ color: 'var(--text2)' }}>Chưa có dữ liệu.</td></tr>
+                ) : (
+                  data.map((row) => (
+                    <tr key={row.scheduleId}>
+                      <td><code>{row.scheduleId}</code></td>
+                      <td>{row.companyName || '—'}</td>
+                      <td>{row.shipName || '—'}</td>
+                      <td>
+                        <span className={`badge ${row.type === 'IMPORT' || row.type === 'import' ? 'badge-success' : 'badge-info'}`}>
+                          {row.type || '—'}
+                        </span>
+                      </td>
+                      <td>{row.timeStart ? new Date(row.timeStart).toLocaleString('vi-VN', { dateStyle: 'short', timeStyle: 'short' }) : '—'}</td>
+                      <td>
+                        <span className="badge badge-info">{row.status || '—'}</span>
+                      </td>
+                      <td style={{ display: 'flex', gap: 6 }}>
+                        <button type="button" className="btn btn-secondary btn-sm" onClick={() => openEdit(row)}>✏ Sửa</button>
+                        <button type="button" className="btn btn-danger btn-sm" onClick={() => handleDelete(row)}>✕ Xóa</button>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
-      <div className={`modal-overlay${open ? ' open' : ''}`} onClick={(e) => e.target === e.currentTarget && setOpen(false)}>
-        <div className="modal">
+      <div className={`modal-overlay${open ? ' open' : ''}`} onClick={(e) => e.target === e.currentTarget && closeModal()}>
+        <div className="modal" style={{ maxWidth: 560 }}>
           <div className="modal-header">
-            <div className="modal-title">Thêm lịch trình</div>
-            <button type="button" className="modal-close" onClick={() => setOpen(false)}>✕</button>
+            <div className="modal-title">{editItem ? 'Sửa lịch trình' : 'Thêm lịch trình'}</div>
+            <button type="button" className="modal-close" onClick={closeModal}>✕</button>
           </div>
+          {formError && <div style={{ color: 'var(--danger)', fontSize: 13, marginBottom: 8 }}>{formError}</div>}
           <div className="form-row">
             <div className="form-group">
-              <label className="form-label">Mã lịch trình</label>
-              <input className="form-input" placeholder="VD: LT-2026-06" value={form.ma} onChange={(e) => setField('ma', e.target.value)} />
+              <label className="form-label">Hãng tàu</label>
+              <input className="form-input" placeholder="VD: Maersk Line" value={form.companyName} onChange={(e) => setField('companyName', e.target.value)} />
             </div>
             <div className="form-group">
-              <label className="form-label">Hãng tàu</label>
-              <select className="form-input" value={form.hangTau} onChange={(e) => setField('hangTau', e.target.value)}>
-                {HANG_TAU_LIST.map((item) => (<option key={item.ma} value={item.ten}>{item.ten}</option>))}
+              <label className="form-label">Tên tàu</label>
+              <input className="form-input" placeholder="VD: Maersk Seletar" value={form.shipName} onChange={(e) => setField('shipName', e.target.value)} />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Loại</label>
+              <select className="form-input" value={form.type} onChange={(e) => setField('type', e.target.value)}>
+                <option value="IMPORT">IMPORT (Nhập)</option>
+                <option value="EXPORT">EXPORT (Xuất)</option>
               </select>
             </div>
-            <div className="form-group" style={{ gridColumn: '1 / -1' }}>
-              <label className="form-label">Tuyến đường</label>
-              <input className="form-input" placeholder="VD: TP.HCM → Singapore" value={form.tuyen} onChange={(e) => setField('tuyen', e.target.value)} />
+            <div className="form-group">
+              <label className="form-label">Trạng thái</label>
+              <select className="form-input" value={form.status} onChange={(e) => setField('status', e.target.value)}>
+                <option value="SCHEDULED">SCHEDULED</option>
+                <option value="IN_PROGRESS">IN_PROGRESS</option>
+                <option value="COMPLETED">COMPLETED</option>
+                <option value="CANCELLED">CANCELLED</option>
+              </select>
             </div>
             <div className="form-group">
-              <label className="form-label">Ngày khởi hành</label>
-              <input className="form-input" type="date" value={form.ngayDi} onChange={(e) => setField('ngayDi', e.target.value)} />
+              <label className="form-label">Thời gian bắt đầu</label>
+              <input className="form-input" type="datetime-local" value={form.timeStart} onChange={(e) => setField('timeStart', e.target.value)} />
             </div>
             <div className="form-group">
-              <label className="form-label">Ngày đến dự kiến</label>
-              <input className="form-input" type="date" value={form.ngayDen} onChange={(e) => setField('ngayDen', e.target.value)} />
+              <label className="form-label">Thời gian kết thúc</label>
+              <input className="form-input" type="datetime-local" value={form.timeEnd} onChange={(e) => setField('timeEnd', e.target.value)} />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Địa điểm</label>
+              <input className="form-input" placeholder="VD: Cảng Cát Lái" value={form.location} onChange={(e) => setField('location', e.target.value)} />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Số container</label>
+              <input className="form-input" type="number" min="0" placeholder="VD: 50" value={form.containers} onChange={(e) => setField('containers', e.target.value)} />
             </div>
           </div>
           <div className="form-actions">
-            <button type="button" className="btn btn-secondary" onClick={() => setOpen(false)}>Hủy</button>
-            <button type="button" className="btn btn-primary" onClick={handleAdd}>Thêm lịch</button>
+            <button type="button" className="btn btn-secondary" onClick={closeModal}>Hủy</button>
+            <button type="button" className="btn btn-primary" onClick={handleSave} disabled={saving}>
+              {saving ? 'Đang lưu...' : editItem ? 'Cập nhật' : 'Thêm'}
+            </button>
           </div>
         </div>
       </div>

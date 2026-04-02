@@ -20,6 +20,7 @@ import {
 import HungThuyLogo from './HungThuyLogo';
 import { useWarehouseAuth } from '../../contexts/WarehouseAuthContext';
 import NotificationsBell from './NotificationsBell';
+import CustomerChatBox from './CustomerChatBox';
 import { projectId, publicAnonKey } from '../../utils/supabase/info';
 
 interface WarehouseLayoutProps {
@@ -402,6 +403,9 @@ export default function WarehouseLayout({ children }: WarehouseLayoutProps) {
           {children}
         </main>
       </div>
+
+      {/* Customer-only chat widget */}
+      {userRole === 'customer' && <CustomerChatBox />}
     </div>
   );
 }

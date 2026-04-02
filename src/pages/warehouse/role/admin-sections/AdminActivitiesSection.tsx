@@ -6,42 +6,47 @@ import { Button } from '../../../../components/ui/button';
 import { Input } from '../../../../components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../../../components/ui/table';
 import { Badge } from '../../../../components/ui/badge';
-import { useWarehouseAuth } from '../../../../contexts/WarehouseAuthContext';
-import { projectId, publicAnonKey } from '../../../../utils/supabase/info';
+import { useWarehouseAuth, API_BASE } from '../../../../contexts/WarehouseAuthContext';
 
-type Activity = {
-  id: string;
-  user_id: string;
-  user_name: string;
-  action_type: string;
-  entity_type: string;
-  entity_id: string;
-  description: string;
-  created_at: string;
+type SystemLog = {
+  logId: number;
+  userId?: number;
+  username?: string;
+  action: string;
+  description?: string;
+  createdAt?: string;
 };
+
+const PAGE_SIZE = 50;
 
 export default function AdminActivitiesSection() {
   const { accessToken } = useWarehouseAuth();
+  const headers = useMemo(
+    () => ({
+      'Content-Type': 'application/json',
+      ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+    }),
+    [accessToken],
+  );
 
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [activities, setActivities] = useState<Activity[]>([]);
-  const [keyword, setKeyword] = useState('');
+  const [loading, setLoading]   = useState(true);
+  const [error, setError]       = useState('');
+  const [logs, setLogs]         = useState<SystemLog[]>([]);
+  const [page, setPage]         = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  const [keyword, setKeyword]   = useState('');
 
-  const apiUrl = `https://${projectId}.supabase.co/functions/v1/make-server-ce1eb60c`;
-  const headers = {
-    'Content-Type': 'application/json',
-    Authorization: `Bearer ${accessToken || publicAnonKey}`,
-  };
-
-  const fetchActivities = async () => {
+  const fetchLogs = async (p = page) => {
     setLoading(true);
     setError('');
     try {
-      const res = await fetch(`${apiUrl}/activities?limit=200`, { headers });
+      const params = new URLSearchParams({ page: String(p), size: String(PAGE_SIZE), sort: 'createdAt,desc' });
+      const res  = await fetch(`${API_BASE}/admin/system-logs?${params}`, { headers });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Lỗi lấy nhật ký hoạt động');
-      setActivities(data.activities || []);
+      if (!res.ok) throw new Error(data.message || 'Lỗi lấy nhật ký hoạt động');
+      setLogs(data.data?.content || []);
+      setTotalPages(data.data?.totalPages || 1);
+      setPage(p);
     } catch (e: any) {
       setError(e.message || 'Lỗi không xác định');
     } finally {
@@ -50,34 +55,31 @@ export default function AdminActivitiesSection() {
   };
 
   useEffect(() => {
-    fetchActivities();
+    fetchLogs(0);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const filtered = useMemo(() => {
     const k = keyword.trim().toLowerCase();
-    if (!k) return activities;
-    return activities.filter((a) => {
-      const haystack = `${a.user_name} ${a.description} ${a.action_type} ${a.entity_type} ${a.entity_id}`.toLowerCase();
-      return haystack.includes(k);
-    });
-  }, [activities, keyword]);
+    if (!k) return logs;
+    return logs.filter((a) =>
+      `${a.username ?? ''} ${a.action} ${a.description ?? ''}`.toLowerCase().includes(k),
+    );
+  }, [logs, keyword]);
 
   return (
     <WarehouseLayout>
       <div className="space-y-6">
         <div>
           <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Nhật ký hoạt động</h1>
-          <p className="text-gray-600 dark:text-gray-400 mt-1">Theo dõi các thao tác tạo/cập nhật/xóa trong hệ thống.</p>
+          <p className="text-gray-600 dark:text-gray-400 mt-1">Theo dõi các thao tác trong hệ thống.</p>
         </div>
 
         {error && (
           <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 rounded-lg p-4 flex items-center gap-2 text-red-700 dark:text-red-300">
             <AlertCircle className="w-5 h-5" />
             <span className="flex-1">{error}</span>
-            <Button size="sm" variant="outline" onClick={fetchActivities} disabled={loading}>
-              Thử lại
-            </Button>
+            <Button size="sm" variant="outline" onClick={() => fetchLogs(page)} disabled={loading}>Thử lại</Button>
           </div>
         )}
 
@@ -85,16 +87,16 @@ export default function AdminActivitiesSection() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Search className="w-5 h-5 text-blue-600" />
-              Danh sách ({filtered.length})
+              Danh sách ({filtered.length} / trang này)
             </CardTitle>
             <div className="mt-3 flex flex-col sm:flex-row gap-3">
               <Input
                 value={keyword}
                 onChange={(e) => setKeyword(e.target.value)}
-                placeholder="Tìm theo mô tả, người dùng, loại..."
+                placeholder="Tìm theo mô tả, người dùng, hành động..."
                 className="sm:flex-1"
               />
-              <Button variant="outline" onClick={fetchActivities} disabled={loading}>
+              <Button variant="outline" onClick={() => fetchLogs(page)} disabled={loading}>
                 <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
                 Làm mới
               </Button>
@@ -102,29 +104,29 @@ export default function AdminActivitiesSection() {
           </CardHeader>
           <CardContent>
             {loading ? (
-              <div className="py-10 text-gray-600 dark:text-gray-400">Đang tải...</div>
+              <div className="py-10 text-gray-500 text-center">Đang tải...</div>
             ) : (
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Thao tác</TableHead>
-                    <TableHead>Đối tượng</TableHead>
+                    <TableHead>Hành động</TableHead>
+                    <TableHead>Người dùng</TableHead>
                     <TableHead>Mô tả</TableHead>
                     <TableHead>Thời gian</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {filtered.map((a) => (
-                    <TableRow key={a.id}>
+                    <TableRow key={a.logId}>
                       <TableCell className="whitespace-nowrap">
-                        <Badge variant="outline">{a.action_type}</Badge>
+                        <Badge variant="outline">{a.action}</Badge>
                       </TableCell>
-                      <TableCell className="whitespace-nowrap text-sm">
-                        {a.entity_type}: {a.entity_id}
+                      <TableCell className="text-sm text-gray-700 dark:text-gray-300">
+                        {a.username ?? (a.userId ? `#${a.userId}` : '—')}
                       </TableCell>
-                      <TableCell className="text-sm">{a.description}</TableCell>
+                      <TableCell className="text-sm">{a.description || '—'}</TableCell>
                       <TableCell className="whitespace-nowrap text-sm text-gray-500">
-                        {new Date(a.created_at).toLocaleString('vi-VN')}
+                        {a.createdAt ? new Date(a.createdAt).toLocaleString('vi-VN') : '—'}
                       </TableCell>
                     </TableRow>
                   ))}
@@ -138,10 +140,17 @@ export default function AdminActivitiesSection() {
                 </TableBody>
               </Table>
             )}
+
+            {totalPages > 1 && (
+              <div className="flex items-center justify-center gap-2 mt-4">
+                <Button variant="outline" size="sm" onClick={() => fetchLogs(page - 1)} disabled={page === 0 || loading}>Trước</Button>
+                <span className="text-sm text-gray-600">Trang {page + 1} / {totalPages}</span>
+                <Button variant="outline" size="sm" onClick={() => fetchLogs(page + 1)} disabled={page >= totalPages - 1 || loading}>Sau</Button>
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
     </WarehouseLayout>
   );
 }
-

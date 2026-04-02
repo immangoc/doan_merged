@@ -10,18 +10,15 @@ import { Textarea } from '../../../../components/ui/textarea';
 import { Badge } from '../../../../components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../../../components/ui/select';
 import ChatBox from '../../../../components/warehouse/ChatBox';
-import { useWarehouseAuth } from '../../../../contexts/WarehouseAuthContext';
-import { projectId, publicAnonKey } from '../../../../utils/supabase/info';
+import { useWarehouseAuth, API_BASE } from '../../../../contexts/WarehouseAuthContext';
 
 type Activity = {
-  id: string;
-  user_id: string;
-  user_name: string;
-  action_type: string;
-  entity_type: string;
-  entity_id: string;
+  logId: number;
+  userId?: number;
+  username?: string;
+  action: string;
   description: string;
-  created_at: string;
+  createdAt: string;
 };
 
 type Preferences = {
@@ -31,14 +28,11 @@ type Preferences = {
 };
 
 type Me = {
-  id: string;
+  userId: number;
+  username: string;
   email: string;
-  name: string;
-  role: string;
-  company?: string;
+  fullName: string;
   phone?: string;
-  address?: string;
-  preferences?: Preferences | null;
 };
 
 function splitHoTen(fullName: string) {
@@ -47,14 +41,26 @@ function splitHoTen(fullName: string) {
   return { ho: parts.slice(0, -1).join(' '), ten: parts[parts.length - 1] || '' };
 }
 
+function loadPrefsFromStorage(): Preferences {
+  try {
+    const theme = localStorage.getItem('ht_ui_theme') || 'light';
+    const language = localStorage.getItem('ht_ui_lang') || 'vi';
+    const notifRaw = localStorage.getItem('ht_ui_notif');
+    const notifications = notifRaw ? JSON.parse(notifRaw) : {};
+    return { theme, language, notifications };
+  } catch {
+    return { theme: 'light', language: 'vi', notifications: {} };
+  }
+}
+
 export default function AdminAccountMergedSection() {
   const { accessToken, user } = useWarehouseAuth();
 
-  const apiUrl = `https://${projectId}.supabase.co/functions/v1/make-server-ce1eb60c`;
+  const apiUrl = API_BASE;
   const headers = useMemo(
     () => ({
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${accessToken || publicAnonKey}`,
+      ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
     }),
     [accessToken],
   );
@@ -78,12 +84,8 @@ export default function AdminAccountMergedSection() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [changingPwd, setChangingPwd] = useState(false);
 
-  // preferences
-  const [prefs, setPrefs] = useState<Preferences>({
-    language: 'vi',
-    theme: 'light',
-    notifications: {},
-  });
+  // preferences — loaded from localStorage, no backend endpoint
+  const [prefs, setPrefs] = useState<Preferences>(loadPrefsFromStorage);
   const [savingPrefs, setSavingPrefs] = useState(false);
 
   // activities
@@ -105,28 +107,23 @@ export default function AdminAccountMergedSection() {
     setLoading(true);
     setError('');
     try {
-      const [meRes, prefRes, actsRes] = await Promise.all([
-        fetch(`${apiUrl}/auth/me`, { headers }),
-        fetch(`${apiUrl}/auth/preferences`, { headers }),
-        fetch(`${apiUrl}/activities?limit=200`, { headers }),
+      const [meRes, actsRes] = await Promise.all([
+        fetch(`${apiUrl}/users/me`, { headers }),
+        fetch(`${apiUrl}/users/me/activity-log?page=0&size=50`, { headers }),
       ]);
       const meData = await meRes.json();
-      const prefData = await prefRes.json();
       const actsData = await actsRes.json();
-      if (!meRes.ok) throw new Error(meData.error || 'Lỗi lấy thông tin cá nhân');
-      if (!prefRes.ok) throw new Error(prefData.error || 'Lỗi lấy preferences');
-      if (!actsRes.ok) throw new Error(actsData.error || 'Lỗi lấy nhật ký hoạt động');
+      if (!meRes.ok) throw new Error(meData.message || 'Lỗi lấy thông tin cá nhân');
+      if (!actsRes.ok) throw new Error(actsData.message || 'Lỗi lấy nhật ký hoạt động');
 
-      setMe(meData);
-      const { ho: _ho, ten: _ten } = splitHoTen(meData.name || '');
+      const meUser = meData.data as Me;
+      setMe(meUser);
+      const { ho: _ho, ten: _ten } = splitHoTen(meUser.fullName || meUser.username || '');
       setHo(_ho);
       setTen(_ten);
-      setCompany(meData.company || '');
-      setPhone(meData.phone || '');
-      setAddress(meData.address || '');
-
-      setPrefs(prefData.preferences || { language: 'vi', theme: 'light', notifications: {} });
-      setActivities(actsData.activities || []);
+      setPhone(meUser.phone || '');
+      // company and address are not stored in backend; keep existing UI values
+      setActivities(actsData.data?.content || []);
     } catch (e: any) {
       setError(e.message || 'Lỗi không xác định');
     } finally {
@@ -138,10 +135,10 @@ export default function AdminAccountMergedSection() {
     setActivitiesLoading(true);
     setActivitiesError('');
     try {
-      const res = await fetch(`${apiUrl}/activities?limit=200`, { headers });
+      const res = await fetch(`${apiUrl}/users/me/activity-log?page=0&size=50`, { headers });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Lỗi lấy nhật ký hoạt động');
-      setActivities(data.activities || []);
+      if (!res.ok) throw new Error(data.message || 'Lỗi lấy nhật ký hoạt động');
+      setActivities(data.data?.content || []);
     } catch (e: any) {
       setActivitiesError(e.message || 'Lỗi không xác định');
     } finally {
@@ -177,7 +174,7 @@ export default function AdminAccountMergedSection() {
   const filteredActivities = useMemo(() => {
     const k = activityKeyword.trim().toLowerCase();
     if (!k) return activities;
-    return activities.filter((a) => `${a.user_name} ${a.description} ${a.action_type} ${a.entity_type}`.toLowerCase().includes(k));
+    return activities.filter((a) => `${a.username ?? ''} ${a.description} ${a.action}`.toLowerCase().includes(k));
   }, [activities, activityKeyword]);
 
   const saveProfile = async () => {
@@ -186,16 +183,12 @@ export default function AdminAccountMergedSection() {
     try {
       const fullName = `${ho} ${ten}`.trim().replace(/\s+/g, ' ');
       if (!fullName) throw new Error('Họ và tên không được để trống');
-
-      const payload = {
-        name: fullName,
-        company,
-        phone,
-        address,
-      };
-      const res = await fetch(`${apiUrl}/auth/profile`, { method: 'PUT', headers, body: JSON.stringify(payload) });
+      const res = await fetch(`${apiUrl}/users/me`, {
+        method: 'PUT', headers,
+        body: JSON.stringify({ fullName, phone }),
+      });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Lỗi cập nhật thông tin');
+      if (!res.ok) throw new Error(data.message || 'Lỗi cập nhật thông tin');
       await fetchAll();
       alert('Cập nhật thông tin thành công');
     } catch (e: any) {
@@ -210,15 +203,13 @@ export default function AdminAccountMergedSection() {
     try {
       if (!currentPassword || !newPassword || !confirmPassword) throw new Error('Vui lòng nhập đầy đủ mật khẩu');
       if (newPassword !== confirmPassword) throw new Error('Xác nhận mật khẩu không khớp');
-      if (newPassword.length < 6) throw new Error('Mật khẩu mới phải có ít nhất 6 ký tự');
-
+      if (newPassword.length < 8) throw new Error('Mật khẩu mới phải có ít nhất 8 ký tự');
       const res = await fetch(`${apiUrl}/auth/change-password`, {
-        method: 'PUT',
-        headers,
-        body: JSON.stringify({ currentPassword, newPassword }),
+        method: 'PUT', headers,
+        body: JSON.stringify({ oldPassword: currentPassword, newPassword }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Lỗi đổi mật khẩu');
+      if (!res.ok) throw new Error(data.message || 'Lỗi đổi mật khẩu');
       setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');
@@ -230,21 +221,15 @@ export default function AdminAccountMergedSection() {
     }
   };
 
-  const savePrefs = async () => {
+  const savePrefs = () => {
     setSavingPrefs(true);
     try {
-      const payload: Preferences = {
-        language: prefs.language || 'vi',
-        theme: prefs.theme || 'light',
-        notifications: prefs.notifications || {},
-      };
-      const res = await fetch(`${apiUrl}/auth/preferences`, { method: 'PUT', headers, body: JSON.stringify(payload) });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Lỗi cập nhật preferences');
-      await fetchAll();
+      localStorage.setItem('ht_ui_theme', prefs.theme || 'light');
+      localStorage.setItem('ht_ui_lang', prefs.language || 'vi');
+      localStorage.setItem('ht_ui_notif', JSON.stringify(prefs.notifications || {}));
       alert('Cập nhật tuỳ chọn hiển thị & thông báo thành công');
-    } catch (e: any) {
-      setError(e.message || 'Lỗi không xác định');
+    } catch {
+      // ignore storage errors
     } finally {
       setSavingPrefs(false);
     }
@@ -298,7 +283,7 @@ export default function AdminAccountMergedSection() {
 
               <div className="space-y-2">
                 <div className="text-sm font-medium text-gray-700">Email</div>
-                <Input value={me?.email || user?.email || ''} disabled />
+                <Input value={me?.email ?? user?.email ?? ''} disabled />
               </div>
 
               <div className="space-y-2">
@@ -475,24 +460,24 @@ export default function AdminAccountMergedSection() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Loại</TableHead>
-                      <TableHead>Đối tượng</TableHead>
+                      <TableHead>Hành động</TableHead>
+                      <TableHead>Người dùng</TableHead>
                       <TableHead>Mô tả</TableHead>
                       <TableHead>Thời gian</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {filteredActivities.slice(0, 8).map((a) => (
-                      <TableRow key={a.id}>
+                      <TableRow key={a.logId}>
                         <TableCell>
-                          <Badge variant="outline">{a.action_type}</Badge>
+                          <Badge variant="outline">{a.action}</Badge>
                         </TableCell>
-                        <TableCell className="text-sm whitespace-nowrap">
-                          {a.entity_type}: {a.entity_id}
+                        <TableCell className="text-sm whitespace-nowrap text-gray-600">
+                          {a.username || '—'}
                         </TableCell>
                         <TableCell className="text-sm">{a.description}</TableCell>
                         <TableCell className="text-sm text-gray-500 whitespace-nowrap">
-                          {new Date(a.created_at).toLocaleDateString('vi-VN')}
+                          {new Date(a.createdAt).toLocaleDateString('vi-VN')}
                         </TableCell>
                       </TableRow>
                     ))}

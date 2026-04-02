@@ -1,158 +1,106 @@
+import { useEffect, useMemo, useState } from 'react';
 import { motion } from 'motion/react';
-import { useWarehouseAuth } from '../../../contexts/WarehouseAuthContext';
-import { 
+import { useWarehouseAuth, API_BASE } from '../../../contexts/WarehouseAuthContext';
+import {
   Container,
   Package,
   Clock,
-  DollarSign,
-  MapPin,
-  FileText,
-  Search,
   Bell,
-  ShieldCheck,
+  AlertTriangle,
+  RefreshCw,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../../../components/ui/card';
 import { Button } from '../../../components/ui/button';
-import { Input } from '../../../components/ui/input';
+import { Badge } from '../../../components/ui/badge';
 import WarehouseLayout from '../../../components/warehouse/WarehouseLayout';
 
+type CustomerDash = {
+  myContainersInYard: number;
+  myPendingOrders: number;
+  myTotalOrders: number;
+  nearExpiryContainerIds: string[];
+};
+
+type NotifItem = {
+  notificationId: number;
+  title: string;
+  description?: string;
+  isRead: boolean;
+  createdAt?: string;
+};
+
+type ContainerItem = {
+  containerId: string;
+  containerTypeName?: string;
+  statusName?: string;
+  cargoTypeName?: string;
+  attributeName?: string;
+  grossWeight?: number;
+  createdAt?: string;
+};
+
 export default function CustomerDashboard() {
-  const { user } = useWarehouseAuth();
+  const { user, accessToken } = useWarehouseAuth();
+  const headers = useMemo(
+    () => ({
+      'Content-Type': 'application/json',
+      ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+    }),
+    [accessToken],
+  );
+
+  const [dash, setDash]             = useState<CustomerDash | null>(null);
+  const [notifications, setNotifs]  = useState<NotifItem[]>([]);
+  const [containers, setContainers] = useState<ContainerItem[]>([]);
+  const [loading, setLoading]       = useState(true);
+  const [error, setError]           = useState('');
+
+  const fetchAll = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const [dashRes, notifRes, ctnRes] = await Promise.all([
+        fetch(`${API_BASE}/dashboard`, { headers }),
+        fetch(`${API_BASE}/notifications/my?page=0&size=5&sort=createdAt,desc`, { headers }),
+        fetch(`${API_BASE}/admin/containers/my?page=0&size=6&sortBy=createdAt&direction=desc`, { headers }),
+      ]);
+
+      const [dashData, notifData, ctnData] = await Promise.all([
+        dashRes.json(),
+        notifRes.json(),
+        ctnRes.json(),
+      ]);
+
+      if (!dashRes.ok) throw new Error(dashData.message || 'Lỗi tải dashboard');
+      setDash(dashData.data);
+      setNotifs(notifData.data?.content || []);
+      setContainers(ctnData.data?.content || []);
+    } catch (e: any) {
+      setError(e.message || 'Lỗi không xác định');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchAll();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const stats = [
-    { 
-      title: 'Container của tôi', 
-      value: '24', 
-      icon: Container, 
-      color: 'bg-blue-500'
-    },
-    { 
-      title: 'Đơn hàng đang xử lý', 
-      value: '6', 
-      icon: Package, 
-      color: 'bg-yellow-500'
-    },
-    { 
-      title: 'Thanh toán chờ', 
-      value: '₫12.5M', 
-      icon: DollarSign, 
-      color: 'bg-green-500'
-    },
-    { 
-      title: 'Thời gian lưu trung bình', 
-      value: '4.5 ngày', 
-      icon: Clock, 
-      color: 'bg-purple-500'
-    },
+    { title: 'Container trong kho', value: dash?.myContainersInYard ?? '—', icon: Container, color: 'bg-blue-500' },
+    { title: 'Đơn hàng đang xử lý', value: dash?.myPendingOrders ?? '—', icon: Package, color: 'bg-yellow-500' },
+    { title: 'Tổng đơn hàng', value: dash?.myTotalOrders ?? '—', icon: Clock, color: 'bg-purple-500' },
+    { title: 'Container sắp hết hạn', value: dash?.nearExpiryContainerIds?.length ?? '—', icon: AlertTriangle, color: 'bg-red-500' },
   ];
 
-  const myContainers = [
-    {
-      id: 1,
-      code: 'CMAU4567890',
-      status: 'Đang lưu kho',
-      badge: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300',
-      location: 'Khu A - Vị trí 23',
-      arrivalDate: '15/11/2024',
-      daysInStorage: 12,
-      size: '40ft',
-      type: 'Khô',
-      fee: '₫450K',
-    },
-    {
-      id: 2,
-      code: 'HLCU3456789',
-      status: 'Sẵn sàng xuất',
-      badge: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300',
-      location: 'Khu B - Vị trí 45',
-      arrivalDate: '20/11/2024',
-      daysInStorage: 7,
-      size: '20ft',
-      type: 'Khô',
-      fee: '₫380K',
-    },
-    {
-      id: 3,
-      code: 'MSCU2345678',
-      status: 'Đang lưu kho',
-      badge: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300',
-      location: 'Khu C - Vị trí 12',
-      arrivalDate: '10/11/2024',
-      daysInStorage: 17,
-      size: '40ft',
-      type: 'Lạnh',
-      fee: '₫720K',
-    },
-    {
-      id: 4,
-      code: 'VSCU1122334',
-      status: 'Đang xuất',
-      badge: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300',
-      location: 'Khu B - Vị trí 08',
-      arrivalDate: '22/11/2024',
-      daysInStorage: 5,
-      size: '20ft',
-      type: 'Khô',
-      fee: '₫310K',
-    },
-    {
-      id: 5,
-      code: 'TIPU9988776',
-      status: 'Đang lưu kho',
-      badge: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300',
-      location: 'Khu D - Vị trí 19',
-      arrivalDate: '01/11/2024',
-      daysInStorage: 24,
-      size: '40ft',
-      type: 'Hỏng',
-      fee: '₫1.1M',
-    },
-    {
-      id: 6,
-      code: 'TGHU2233445',
-      status: 'Đang lưu kho',
-      badge: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300',
-      location: 'Khu E - Vị trí 03',
-      arrivalDate: '08/11/2024',
-      daysInStorage: 16,
-      size: '20ft',
-      type: 'Dễ vỡ',
-      fee: '₫620K',
-    },
-  ];
-
-  const recentOrders = [
-    {
-      id: '#ORD-2024-1156',
-      type: 'Nhập kho',
-      date: '25/11/2024',
-      status: 'Hoàn thành',
-      containers: 2,
-      total: '₫890K'
-    },
-    {
-      id: '#ORD-2024-1089',
-      type: 'Xuất kho',
-      date: '18/11/2024',
-      status: 'Đang xử lý',
-      containers: 1,
-      total: '₫450K'
-    },
-    {
-      id: '#ORD-2024-1034',
-      type: 'Nhập kho',
-      date: '12/11/2024',
-      status: 'Hoàn thành',
-      containers: 3,
-      total: '₫1.34M'
-    },
-  ];
-
-  const notifications = [
-    { id: 1, type: 'warning', message: 'Container CMAU4567890 sắp hết thời gian lưu miễn phí', time: '2 giờ trước' },
-    { id: 2, type: 'info', message: 'Container HLCU3456789 đã sẵn sàng xuất cảng', time: '5 giờ trước' },
-    { id: 3, type: 'success', message: 'Thanh toán đơn hàng #ORD-2024-1156 thành công', time: '1 ngày trước' },
-  ];
+  const statusBadge = (status?: string) => {
+    if (!status) return 'bg-gray-100 text-gray-600';
+    const s = status.toLowerCase();
+    if (s.includes('out') || s.includes('xuất')) return 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300';
+    if (s.includes('in') || s.includes('kho')) return 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300';
+    return 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400';
+  };
 
   return (
     <WarehouseLayout>
@@ -164,17 +112,17 @@ export default function CustomerDashboard() {
               Chào mừng <span className="font-semibold">{user?.name || 'Khách hàng'}</span> đến với kho hàng của bạn.
             </p>
           </div>
-          <div className="flex flex-wrap gap-3 items-center">
-            <Button variant="outline" className="gap-2">
-              <Bell className="w-4 h-4" />
-              Thông báo
-            </Button>
-            <Button className="gap-2 bg-blue-600 hover:bg-blue-700">
-              <Package className="w-4 h-4" />
-              Đặt dịch vụ
-            </Button>
-          </div>
+          <Button variant="outline" onClick={fetchAll} disabled={loading}>
+            <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+            Làm mới
+          </Button>
         </div>
+
+        {error && (
+          <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 rounded-lg p-4 text-red-700 dark:text-red-300 text-sm">
+            {error}
+          </div>
+        )}
 
         <div className="grid gap-6 xl:grid-cols-[1.7fr_0.95fr]">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
@@ -210,124 +158,95 @@ export default function CustomerDashboard() {
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              {notifications.map((notification) => (
-                <div key={notification.id} className="rounded-3xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-4">
-                  <div className="flex items-center gap-3">
-                    <div className={`w-3 h-3 rounded-full ${
-                      notification.type === 'warning'
-                        ? 'bg-yellow-500'
-                        : notification.type === 'success'
-                        ? 'bg-green-500'
-                        : 'bg-blue-500'
-                    }`} />
-                    <p className="text-sm text-gray-900 dark:text-white">{notification.message}</p>
+              {loading ? (
+                <div className="text-sm text-gray-400 text-center py-4">Đang tải...</div>
+              ) : notifications.length === 0 ? (
+                <div className="text-sm text-gray-400 text-center py-4">Không có thông báo</div>
+              ) : (
+                notifications.map((n) => (
+                  <div key={n.notificationId} className="rounded-3xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-4">
+                    <div className="flex items-start gap-3">
+                      <div className={`w-3 h-3 rounded-full mt-1 flex-shrink-0 ${n.isRead ? 'bg-gray-300' : 'bg-blue-500'}`} />
+                      <p className="text-sm text-gray-900 dark:text-white font-medium">{n.title}</p>
+                    </div>
+                    {n.description && (
+                      <p className="mt-1 text-xs text-gray-500 dark:text-gray-400 pl-6">{n.description}</p>
+                    )}
+                    {n.createdAt && (
+                      <p className="mt-1 text-xs text-gray-400 pl-6">{new Date(n.createdAt).toLocaleString('vi-VN')}</p>
+                    )}
                   </div>
-                  <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">{notification.time}</p>
-                </div>
-              ))}
+                ))
+              )}
             </CardContent>
           </Card>
         </div>
 
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <p className="text-sm font-semibold text-gray-700 dark:text-gray-300">Tra cứu nhanh container</p>
-                <p className="text-sm text-gray-500 dark:text-gray-400">Tìm container theo mã, trạng thái hoặc vị trí.</p>
-              </div>
-              <div className="relative w-full sm:w-96">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-                <Input placeholder="Tìm kiếm container..." className="pl-10 h-12" />
-              </div>
+        {(dash?.nearExpiryContainerIds?.length ?? 0) > 0 && (
+          <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-700 rounded-lg p-4">
+            <div className="flex items-center gap-2 text-yellow-800 dark:text-yellow-200 font-semibold text-sm mb-2">
+              <AlertTriangle className="w-4 h-4" />
+              Container sắp hết hạn lưu trữ ({dash!.nearExpiryContainerIds.length})
             </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Package className="w-5 h-5" />
-              Tổng hợp kho
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid gap-3 md:grid-cols-3">
-              <div className="rounded-3xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-4">
-                <div className="text-sm font-semibold text-gray-900 dark:text-white">Container khô</div>
-                <div className="mt-3 text-2xl font-bold text-gray-900 dark:text-white">18</div>
-                <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">Container hiện có</p>
-              </div>
-              <div className="rounded-3xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-4">
-                <div className="text-sm font-semibold text-gray-900 dark:text-white">Container lạnh</div>
-                <div className="mt-3 text-2xl font-bold text-gray-900 dark:text-white">5</div>
-                <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">Container hiện có</p>
-              </div>
-              <div className="rounded-3xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-4">
-                <div className="text-sm font-semibold text-gray-900 dark:text-white">Container hỏng</div>
-                <div className="mt-3 text-2xl font-bold text-gray-900 dark:text-white">2</div>
-                <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">Container hiện có</p>
-              </div>
+            <div className="flex flex-wrap gap-2">
+              {dash!.nearExpiryContainerIds.map((id) => (
+                <Badge key={id} className="bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-200">
+                  {id}
+                </Badge>
+              ))}
             </div>
-            <div className="grid gap-3 md:grid-cols-2">
-              <div className="rounded-3xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-4">
-                <div className="text-sm font-semibold text-gray-900 dark:text-white">Container dễ vỡ</div>
-                <div className="mt-3 text-2xl font-bold text-gray-900 dark:text-white">1</div>
-                <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">Container hiện có</p>
-              </div>
-              <div className="rounded-3xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-4">
-                <div className="text-sm font-semibold text-gray-900 dark:text-white">Container khác</div>
-                <div className="mt-3 text-2xl font-bold text-gray-900 dark:text-white">4</div>
-                <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">Container hiện có</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+          </div>
+        )}
 
         <Card>
           <CardHeader>
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 w-full">
               <CardTitle className="flex items-center gap-2">
                 <Container className="w-5 h-5" />
-                Container của tôi
+                Container của tôi (6 gần nhất)
               </CardTitle>
-              <div className="text-sm text-gray-500 dark:text-gray-400">Hiển thị 6 container gần đây, kéo xuống để xem thêm</div>
             </div>
           </CardHeader>
-          <CardContent className="space-y-4 max-h-[520px] overflow-y-auto pr-2">
-            {myContainers.map((container, index) => (
-              <motion.div
-                key={container.id}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: index * 0.08 }}
-                className="rounded-3xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-4"
-              >
-                <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                  <div className="flex items-start gap-4 flex-1">
-                    <div className="rounded-3xl bg-blue-500 p-3 text-white">
-                      <Container className="w-5 h-5" />
-                    </div>
-                    <div className="flex-1">
-                      <div className="flex flex-wrap items-center gap-3">
-                        <h3 className="text-lg font-semibold text-gray-900 dark:text-white">{container.code}</h3>
-                        <span className={`rounded-full px-3 py-1 text-xs font-semibold ${container.badge}`}>{container.status}</span>
+          <CardContent className="space-y-4">
+            {loading ? (
+              <div className="text-center text-gray-500 py-8">Đang tải...</div>
+            ) : containers.length === 0 ? (
+              <div className="text-center text-gray-500 py-8">Chưa có container nào.</div>
+            ) : (
+              containers.map((c, index) => (
+                <motion.div
+                  key={c.containerId}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: index * 0.08 }}
+                  className="rounded-3xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-4"
+                >
+                  <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                    <div className="flex items-start gap-4 flex-1">
+                      <div className="rounded-3xl bg-blue-500 p-3 text-white">
+                        <Container className="w-5 h-5" />
                       </div>
-                      <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4 text-sm text-gray-600 dark:text-gray-300">
-                        <div className="flex items-center gap-2"><MapPin className="w-4 h-4" />{container.location}</div>
-                        <div>Loại: {container.size} {container.type}</div>
-                        <div>Ngày nhập: {container.arrivalDate}</div>
-                        <div>Thời gian lưu: {container.daysInStorage} ngày</div>
+                      <div className="flex-1">
+                        <div className="flex flex-wrap items-center gap-3">
+                          <h3 className="text-lg font-semibold text-gray-900 dark:text-white">{c.containerId}</h3>
+                          {c.statusName && (
+                            <span className={`rounded-full px-3 py-1 text-xs font-semibold ${statusBadge(c.statusName)}`}>
+                              {c.statusName}
+                            </span>
+                          )}
+                        </div>
+                        <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 text-sm text-gray-600 dark:text-gray-300">
+                          {c.containerTypeName && <div><span className="font-semibold">Loại:</span> {c.containerTypeName}</div>}
+                          {c.cargoTypeName && <div><span className="font-semibold">Hàng:</span> {c.cargoTypeName}</div>}
+                          {c.grossWeight != null && <div><span className="font-semibold">Trọng lượng:</span> {c.grossWeight} kg</div>}
+                          {c.createdAt && <div><span className="font-semibold">Ngày tạo:</span> {new Date(c.createdAt).toLocaleDateString('vi-VN')}</div>}
+                        </div>
                       </div>
                     </div>
                   </div>
-                  <div className="flex flex-col items-end gap-3">
-                    <div className="text-xl font-bold text-gray-900 dark:text-white">{container.fee}</div>
-                    <Button size="sm" variant="outline">Chi tiết</Button>
-                  </div>
-                </div>
-              </motion.div>
-            ))}
+                </motion.div>
+              ))
+            )}
           </CardContent>
         </Card>
       </div>

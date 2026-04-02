@@ -6,17 +6,16 @@ import { Button } from '../../../../components/ui/button';
 import { Input } from '../../../../components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../../../components/ui/table';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '../../../../components/ui/dialog';
-import { useWarehouseAuth } from '../../../../contexts/WarehouseAuthContext';
-import { projectId, publicAnonKey } from '../../../../utils/supabase/info';
+import { useWarehouseAuth, API_BASE } from '../../../../contexts/WarehouseAuthContext';
 
 type TypeItem = { id: string; name: string; created_at?: string; updated_at?: string };
 
 export default function AdminContainerTypesSection() {
   const { accessToken } = useWarehouseAuth();
-  const apiUrl = `https://${projectId}.supabase.co/functions/v1/make-server-ce1eb60c`;
+  const apiUrl = API_BASE;
   const headers = {
     'Content-Type': 'application/json',
-    Authorization: `Bearer ${accessToken || publicAnonKey}`,
+    ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
   };
 
   const [loading, setLoading] = useState(true);
@@ -38,10 +37,12 @@ export default function AdminContainerTypesSection() {
     setLoading(true);
     setError('');
     try {
-      const res = await fetch(`${apiUrl}/container-types`, { headers });
+      const res = await fetch(`${apiUrl}/admin/container-types`, { headers });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Lỗi lấy loại container');
-      setItems(data.items || []);
+      if (!res.ok) throw new Error(data.message || 'Lỗi lấy loại container');
+      // Backend returns ApiResponse<List<{containerTypeId, containerTypeName}>>
+      const raw: { containerTypeId: number; containerTypeName: string }[] = data.data || [];
+      setItems(raw.map(it => ({ id: String(it.containerTypeId), name: it.containerTypeName })));
     } catch (e: any) {
       setError(e.message || 'Lỗi không xác định');
     } finally {
@@ -64,9 +65,12 @@ export default function AdminContainerTypesSection() {
     try {
       const name = formName.trim();
       if (!name) return alert('Tên không được để trống');
-      const res = await fetch(`${apiUrl}/container-types`, { method: 'POST', headers, body: JSON.stringify({ name }) });
+      const res = await fetch(`${apiUrl}/admin/container-types`, {
+        method: 'POST', headers,
+        body: JSON.stringify({ containerTypeName: name }),
+      });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Lỗi thêm loại container');
+      if (!res.ok) throw new Error(data.message || 'Lỗi thêm loại container');
       setOpenCreate(false);
       setFormName('');
       await fetchItems();
@@ -86,13 +90,13 @@ export default function AdminContainerTypesSection() {
     try {
       const name = formName.trim();
       if (!name) return alert('Tên không được để trống');
-      const res = await fetch(`${apiUrl}/container-types/${editing.id}`, {
-        method: 'PATCH',
+      const res = await fetch(`${apiUrl}/admin/container-types/${editing.id}`, {
+        method: 'PUT',
         headers,
-        body: JSON.stringify({ name }),
+        body: JSON.stringify({ containerTypeName: name }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Lỗi cập nhật');
+      if (!res.ok) throw new Error(data.message || 'Lỗi cập nhật');
       setOpenEdit(false);
       setEditing(null);
       setFormName('');
@@ -106,9 +110,9 @@ export default function AdminContainerTypesSection() {
     const ok = confirm('Bạn có chắc chắn muốn xóa loại container này không?');
     if (!ok) return;
     try {
-      const res = await fetch(`${apiUrl}/container-types/${id}`, { method: 'DELETE', headers });
+      const res = await fetch(`${apiUrl}/admin/container-types/${id}`, { method: 'DELETE', headers });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Lỗi xóa');
+      if (!res.ok) throw new Error(data.message || 'Lỗi xóa');
       await fetchItems();
     } catch (e: any) {
       alert(e.message || 'Lỗi không xác định');

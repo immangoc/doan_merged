@@ -5,8 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '../../../../components
 import { Button } from '../../../../components/ui/button';
 import { Input } from '../../../../components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../../../components/ui/table';
-import { useWarehouseAuth } from '../../../../contexts/WarehouseAuthContext';
-import { projectId, publicAnonKey } from '../../../../utils/supabase/info';
+import { useWarehouseAuth, API_BASE } from '../../../../contexts/WarehouseAuthContext';
 
 type CargoType = { id: string; name: string };
 
@@ -21,10 +20,10 @@ type FeesConfig = {
 
 export default function AdminFeesSection() {
   const { accessToken } = useWarehouseAuth();
-  const apiUrl = `https://${projectId}.supabase.co/functions/v1/make-server-ce1eb60c`;
+  const apiUrl = API_BASE;
   const headers = {
     'Content-Type': 'application/json',
-    Authorization: `Bearer ${accessToken || publicAnonKey}`,
+    ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
   };
 
   const [loading, setLoading] = useState(true);
@@ -45,15 +44,19 @@ export default function AdminFeesSection() {
     setError('');
     try {
       const [tRes, fRes] = await Promise.all([
-        fetch(`${apiUrl}/cargo-types`, { headers }),
-        fetch(`${apiUrl}/fees`, { headers }),
+        fetch(`${apiUrl}/admin/cargo-types`, { headers }),
+        fetch(`${apiUrl}/admin/fees`, { headers }),
       ]);
       const tData = await tRes.json();
       const fData = await fRes.json();
-      if (!tRes.ok) throw new Error(tData.error || 'Lỗi lấy loại hàng');
-      if (!fRes.ok) throw new Error(fData.error || 'Lỗi lấy cước phí');
-      setCargoTypes(tData.items || []);
-      if (fData.fees) setFees(fData.fees);
+      if (!tRes.ok) throw new Error(tData.message || 'Lỗi lấy loại hàng');
+      if (!fRes.ok) throw new Error(fData.message || 'Lỗi lấy cước phí');
+      const rawT: { cargoTypeId: number; cargoTypeName: string }[] = tData.data || [];
+      setCargoTypes(rawT.map(it => ({ id: String(it.cargoTypeId), name: it.cargoTypeName })));
+      if (fData.data) {
+        const f = fData.data;
+        setFees({ id: String(f.configId), currency: f.currency, costRate: f.costRate, ratePerKgDefault: f.ratePerKgDefault, ratePerKgByCargoType: f.ratePerKgByCargoType || {}, updated_at: f.updatedAt });
+      }
     } catch (e: any) {
       setError(e.message || 'Lỗi không xác định');
     } finally {
@@ -93,13 +96,13 @@ export default function AdminFeesSection() {
         ratePerKgDefault: Number(fees.ratePerKgDefault),
         ratePerKgByCargoType: fees.ratePerKgByCargoType || {},
       };
-      const res = await fetch(`${apiUrl}/fees`, {
+      const res = await fetch(`${apiUrl}/admin/fees`, {
         method: 'PUT',
         headers,
         body: JSON.stringify(payload),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Lỗi cập nhật cước phí');
+      if (!res.ok) throw new Error(data.message || 'Lỗi cập nhật cước phí');
       await fetchAll();
       alert('Cập nhật cước phí thành công');
     } catch (e: any) {

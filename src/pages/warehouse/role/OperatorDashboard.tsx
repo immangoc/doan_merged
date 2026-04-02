@@ -1,155 +1,131 @@
+import { useEffect, useMemo, useState } from 'react';
 import { motion } from 'motion/react';
-import { useWarehouseAuth } from '../../../contexts/WarehouseAuthContext';
-import { 
+import { useWarehouseAuth, API_BASE } from '../../../contexts/WarehouseAuthContext';
+import {
   Container,
   CheckCircle,
   Clock,
-  Truck,
-  MapPin,
-  Package,
   AlertTriangle,
+  Package,
+  RefreshCw,
   Scan,
-  FileText
+  FileText,
+  MapPin,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../../../components/ui/card';
 import { Button } from '../../../components/ui/button';
 import WarehouseLayout from '../../../components/warehouse/WarehouseLayout';
 
+type AdminDash = {
+  gateInToday: number;
+  gateOutToday: number;
+  containersInYard: number;
+  pendingOrders: number;
+  openAlerts: number;
+  criticalAlerts: number;
+};
+
+type GateInItem = {
+  gateInId: number;
+  containerId: string;
+  voyageNo?: string;
+  gateInTime?: string;
+  createdByUsername?: string;
+  note?: string;
+};
+
+type GateOutItem = {
+  gateOutId: number;
+  containerId: string;
+  gateOutTime?: string;
+  createdByUsername?: string;
+  note?: string;
+};
+
 export default function OperatorDashboard() {
-  const { user } = useWarehouseAuth();
+  const { user, accessToken } = useWarehouseAuth();
+  const headers = useMemo(
+    () => ({
+      'Content-Type': 'application/json',
+      ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+    }),
+    [accessToken],
+  );
+
+  const [dash, setDash]       = useState<AdminDash | null>(null);
+  const [gateIns, setGateIns] = useState<GateInItem[]>([]);
+  const [gateOuts, setGateOuts] = useState<GateOutItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError]     = useState('');
+
+  const fetchAll = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const [dashRes, giRes, goRes] = await Promise.all([
+        fetch(`${API_BASE}/admin/dashboard`, { headers }),
+        fetch(`${API_BASE}/admin/gate-in?page=0&size=10&sort=gateInTime,desc`, { headers }),
+        fetch(`${API_BASE}/admin/gate-out?page=0&size=10&sort=gateOutTime,desc`, { headers }),
+      ]);
+      const [dashData, giData, goData] = await Promise.all([
+        dashRes.json(), giRes.json(), goRes.json(),
+      ]);
+      if (!dashRes.ok) throw new Error(dashData.message || 'Lỗi tải dashboard');
+      setDash(dashData.data);
+      setGateIns(giData.data?.content || []);
+      setGateOuts(goData.data?.content || []);
+    } catch (e: any) {
+      setError(e.message || 'Lỗi không xác định');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchAll();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const stats = [
-    { 
-      title: 'Nhiệm vụ hôm nay', 
-      value: '18', 
-      icon: Package, 
-      color: 'bg-blue-500'
-    },
-    { 
-      title: 'Đã hoàn thành', 
-      value: '12', 
-      icon: CheckCircle, 
-      color: 'bg-green-500'
-    },
-    { 
-      title: 'Đang thực hiện', 
-      value: '4', 
-      icon: Clock, 
-      color: 'bg-yellow-500'
-    },
-    { 
-      title: 'Cần xử lý', 
-      value: '2', 
-      icon: AlertTriangle, 
-      color: 'bg-red-500'
-    },
-  ];
-
-  const currentTasks = [
-    {
-      id: 1,
-      container: 'CMAU4567890',
-      type: 'import',
-      status: 'in-progress',
-      location: 'Bến 3 - Cổng A',
-      startTime: '09:30',
-      customer: 'Công ty ABC',
-      size: '40ft',
-      weight: '24,000 kg'
-    },
-    {
-      id: 2,
-      container: 'HLCU3456789',
-      type: 'export',
-      status: 'in-progress',
-      location: 'Khu B - Vị trí 45',
-      startTime: '10:15',
-      customer: 'Công ty XYZ',
-      size: '20ft',
-      weight: '18,500 kg'
-    },
-  ];
-
-  const pendingTasks = [
-    {
-      id: 3,
-      container: 'MSCU2345678',
-      type: 'import',
-      priority: 'high',
-      scheduledTime: '11:00',
-      customer: 'Công ty DEF',
-      size: '40ft',
-      notes: 'Hàng lạnh, cần xử lý ưu tiên'
-    },
-    {
-      id: 4,
-      container: 'TGHU5678901',
-      type: 'export',
-      priority: 'medium',
-      scheduledTime: '13:30',
-      customer: 'Công ty GHI',
-      size: '20ft',
-      notes: ''
-    },
-    {
-      id: 5,
-      container: 'OOLU6789012',
-      type: 'import',
-      priority: 'medium',
-      scheduledTime: '14:00',
-      customer: 'Công ty JKL',
-      size: '40ft',
-      notes: ''
-    },
-  ];
-
-  const completedToday = [
-    { id: 1, container: 'YMLU1234567', type: 'export', time: '08:45', customer: 'Công ty MNO' },
-    { id: 2, container: 'APZU2345678', type: 'import', time: '08:15', customer: 'Công ty PQR' },
-    { id: 3, container: 'CAXU3456789', type: 'export', time: '07:30', customer: 'Công ty STU' },
+    { title: 'Gate-In hôm nay', value: dash?.gateInToday ?? '—', icon: Package, color: 'bg-green-500' },
+    { title: 'Gate-Out hôm nay', value: dash?.gateOutToday ?? '—', icon: CheckCircle, color: 'bg-blue-500' },
+    { title: 'Container trong kho', value: dash?.containersInYard ?? '—', icon: Container, color: 'bg-indigo-500' },
+    { title: 'Đơn hàng chờ duyệt', value: dash?.pendingOrders ?? '—', icon: AlertTriangle, color: dash?.pendingOrders ? 'bg-red-500' : 'bg-gray-400' },
   ];
 
   const quickActions = [
-    { title: 'Quét QR Container', icon: Scan, action: 'scan', color: 'bg-blue-500' },
-    { title: 'Báo cáo sự cố', icon: AlertTriangle, action: 'report', color: 'bg-red-500' },
-    { title: 'Kiểm tra vị trí', icon: MapPin, action: 'location', color: 'bg-green-500' },
-    { title: 'Ghi chú', icon: FileText, action: 'note', color: 'bg-yellow-500' },
+    { title: 'Quét QR Container', icon: Scan, color: 'bg-blue-500' },
+    { title: 'Báo cáo sự cố', icon: AlertTriangle, color: 'bg-red-500' },
+    { title: 'Kiểm tra vị trí', icon: MapPin, color: 'bg-green-500' },
+    { title: 'Ghi chú', icon: FileText, color: 'bg-yellow-500' },
   ];
 
   return (
     <WarehouseLayout>
       <div className="space-y-6">
-        {/* Header */}
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-              Dashboard Vận hành
-            </h1>
+            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Dashboard Vận hành</h1>
             <p className="text-gray-600 dark:text-gray-400 mt-1">
-              Xin chào <span className="font-semibold">{user?.name}</span>, bạn đang có {currentTasks.length} nhiệm vụ đang thực hiện
+              Xin chào <span className="font-semibold">{user?.name}</span>
+              {dash ? `, hôm nay ${dash.gateInToday} lượt gate-in, ${dash.gateOutToday} lượt gate-out.` : '.'}
             </p>
           </div>
-          <div className="flex gap-3">
-            <Button variant="outline" className="gap-2">
-              <FileText className="w-4 h-4" />
-              Lịch sử
-            </Button>
-            <Button className="gap-2 bg-blue-600 hover:bg-blue-700">
-              <Scan className="w-4 h-4" />
-              Quét QR
-            </Button>
-          </div>
+          <Button variant="outline" onClick={fetchAll} disabled={loading}>
+            <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+            Làm mới
+          </Button>
         </div>
 
-        {/* Stats Grid */}
+        {error && (
+          <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 rounded-lg p-4 text-red-700 dark:text-red-300 text-sm">
+            {error}
+          </div>
+        )}
+
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {stats.map((stat, index) => (
-            <motion.div
-              key={stat.title}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: index * 0.1 }}
-            >
+            <motion.div key={stat.title} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * 0.1 }}>
               <Card>
                 <CardContent className="p-4">
                   <div className="flex items-center gap-3">
@@ -157,12 +133,8 @@ export default function OperatorDashboard() {
                       <stat.icon className="w-5 h-5 text-white" />
                     </div>
                     <div>
-                      <p className="text-xs text-gray-600 dark:text-gray-400">
-                        {stat.title}
-                      </p>
-                      <h3 className="text-xl font-bold text-gray-900 dark:text-white">
-                        {stat.value}
-                      </h3>
+                      <p className="text-xs text-gray-600 dark:text-gray-400">{stat.title}</p>
+                      <h3 className="text-xl font-bold text-gray-900 dark:text-white">{loading ? '...' : stat.value}</h3>
                     </div>
                   </div>
                 </CardContent>
@@ -171,7 +143,6 @@ export default function OperatorDashboard() {
           ))}
         </div>
 
-        {/* Quick Actions */}
         <Card>
           <CardContent className="p-4">
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -186,174 +157,92 @@ export default function OperatorDashboard() {
                   <div className={`${action.color} p-3 rounded-lg`}>
                     <action.icon className="w-5 h-5 text-white" />
                   </div>
-                  <span className="text-xs font-medium text-center text-gray-700 dark:text-gray-300">
-                    {action.title}
-                  </span>
+                  <span className="text-xs font-medium text-center text-gray-700 dark:text-gray-300">{action.title}</span>
                 </motion.button>
               ))}
             </div>
           </CardContent>
         </Card>
 
-        {/* Current Tasks */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Clock className="w-5 h-5" />
-              Đang thực hiện
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {currentTasks.map((task, index) => (
-                <motion.div
-                  key={task.id}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: index * 0.1 }}
-                  className="p-4 rounded-lg bg-yellow-50 dark:bg-yellow-900/10 border-2 border-yellow-200 dark:border-yellow-800"
-                >
-                  <div className="flex items-start justify-between mb-3">
-                    <div className="flex items-center gap-3">
-                      <div className={`p-2 rounded-lg ${
-                        task.type === 'import' ? 'bg-green-500' : 'bg-blue-500'
-                      }`}>
-                        <Container className="w-5 h-5 text-white" />
-                      </div>
-                      <div>
-                        <h3 className="font-bold text-gray-900 dark:text-white text-lg">
-                          {task.container}
-                        </h3>
-                        <p className="text-sm text-gray-600 dark:text-gray-400">
-                          {task.customer} • {task.size}
-                        </p>
-                      </div>
-                    </div>
-                    <span className="px-3 py-1 bg-yellow-500 text-white text-xs font-semibold rounded-full">
-                      {task.type === 'import' ? 'NHẬP' : 'XUẤT'}
-                    </span>
-                  </div>
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm">
-                    <div className="flex items-center gap-2 text-gray-700 dark:text-gray-300">
-                      <MapPin className="w-4 h-4" />
-                      <span>{task.location}</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-gray-700 dark:text-gray-300">
-                      <Clock className="w-4 h-4" />
-                      <span>Bắt đầu: {task.startTime}</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-gray-700 dark:text-gray-300">
-                      <Package className="w-4 h-4" />
-                      <span>{task.weight}</span>
-                    </div>
-                  </div>
-                  <div className="flex gap-2 mt-4">
-                    <Button size="sm" className="flex-1 bg-green-600 hover:bg-green-700">
-                      <CheckCircle className="w-4 h-4 mr-2" />
-                      Hoàn thành
-                    </Button>
-                    <Button size="sm" variant="outline" className="flex-1">
-                      <FileText className="w-4 h-4 mr-2" />
-                      Ghi chú
-                    </Button>
-                  </div>
-                </motion.div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Pending Tasks & Completed Today */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Pending Tasks */}
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <Package className="w-5 h-5" />
-                Nhiệm vụ chờ xử lý
+                <Package className="w-5 h-5 text-green-600" />
+                Gate-In gần đây
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="space-y-3">
-                {pendingTasks.map((task, index) => (
-                  <motion.div
-                    key={task.id}
-                    initial={{ opacity: 0, x: -20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: index * 0.1 }}
-                    className="p-3 rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
-                  >
-                    <div className="flex items-start justify-between mb-2">
-                      <div>
-                        <h4 className="font-semibold text-gray-900 dark:text-white">
-                          {task.container}
-                        </h4>
-                        <p className="text-xs text-gray-600 dark:text-gray-400">
-                          {task.customer} • {task.size}
-                        </p>
+              {loading ? (
+                <div className="py-8 text-center text-gray-500 text-sm">Đang tải...</div>
+              ) : gateIns.length === 0 ? (
+                <div className="py-8 text-center text-gray-500 text-sm">Chưa có dữ liệu gate-in.</div>
+              ) : (
+                <div className="space-y-3">
+                  {gateIns.map((g, index) => (
+                    <motion.div
+                      key={g.gateInId}
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: index * 0.06 }}
+                      className="p-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-green-50/40 dark:bg-green-900/10"
+                    >
+                      <div className="flex items-center justify-between mb-1">
+                        <h4 className="font-semibold text-gray-900 dark:text-white">{g.containerId}</h4>
+                        <span className="text-xs text-gray-500">
+                          {g.gateInTime ? new Date(g.gateInTime).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : '—'}
+                        </span>
                       </div>
-                      <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
-                        task.priority === 'high'
-                          ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
-                          : 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
-                      }`}>
-                        {task.priority === 'high' ? 'Ưu tiên' : 'Bình thường'}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 mb-2">
-                      <Clock className="w-4 h-4" />
-                      <span>Dự kiến: {task.scheduledTime}</span>
-                    </div>
-                    {task.notes && (
-                      <p className="text-xs text-gray-600 dark:text-gray-400 mb-2">
-                        <AlertTriangle className="w-3 h-3 inline mr-1" />
-                        {task.notes}
-                      </p>
-                    )}
-                    <Button size="sm" variant="outline" className="w-full">
-                      Bắt đầu nhiệm vụ
-                    </Button>
-                  </motion.div>
-                ))}
-              </div>
+                      <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
+                        <Clock className="w-3 h-3" />
+                        <span>{g.gateInTime ? new Date(g.gateInTime).toLocaleDateString('vi-VN') : '—'}</span>
+                        {g.createdByUsername && <span>· {g.createdByUsername}</span>}
+                        {g.voyageNo && <span>· {g.voyageNo}</span>}
+                      </div>
+                      {g.note && <p className="mt-1 text-xs text-gray-500 italic">{g.note}</p>}
+                    </motion.div>
+                  ))}
+                </div>
+              )}
             </CardContent>
           </Card>
 
-          {/* Completed Today */}
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <CheckCircle className="w-5 h-5" />
-                Đã hoàn thành hôm nay
+                <CheckCircle className="w-5 h-5 text-blue-600" />
+                Gate-Out gần đây
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="space-y-3">
-                {completedToday.map((item, index) => (
-                  <motion.div
-                    key={item.id}
-                    initial={{ opacity: 0, x: 20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: index * 0.1 }}
-                    className="flex items-center gap-3 p-3 rounded-lg bg-green-50 dark:bg-green-900/10"
-                  >
-                    <div className="p-2 bg-green-500 rounded-lg">
-                      <CheckCircle className="w-5 h-5 text-white" />
-                    </div>
-                    <div className="flex-1">
-                      <h4 className="font-semibold text-gray-900 dark:text-white">
-                        {item.container}
-                      </h4>
-                      <p className="text-xs text-gray-600 dark:text-gray-400">
-                        {item.customer}
-                      </p>
-                    </div>
-                    <div className="text-right text-xs text-gray-500 dark:text-gray-400">
-                      {item.time}
-                    </div>
-                  </motion.div>
-                ))}
-              </div>
+              {loading ? (
+                <div className="py-8 text-center text-gray-500 text-sm">Đang tải...</div>
+              ) : gateOuts.length === 0 ? (
+                <div className="py-8 text-center text-gray-500 text-sm">Chưa có dữ liệu gate-out.</div>
+              ) : (
+                <div className="space-y-3">
+                  {gateOuts.map((g, index) => (
+                    <motion.div
+                      key={g.gateOutId}
+                      initial={{ opacity: 0, x: 20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: index * 0.06 }}
+                      className="flex items-center gap-3 p-3 rounded-lg bg-blue-50/40 dark:bg-blue-900/10 border border-gray-200 dark:border-gray-700"
+                    >
+                      <div className="p-2 bg-blue-500 rounded-lg flex-shrink-0">
+                        <CheckCircle className="w-4 h-4 text-white" />
+                      </div>
+                      <div className="flex-1">
+                        <h4 className="font-semibold text-gray-900 dark:text-white text-sm">{g.containerId}</h4>
+                        <p className="text-xs text-gray-600 dark:text-gray-400">
+                          {g.gateOutTime ? new Date(g.gateOutTime).toLocaleString('vi-VN') : '—'}
+                          {g.createdByUsername && ` · ${g.createdByUsername}`}
+                        </p>
+                      </div>
+                    </motion.div>
+                  ))}
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>

@@ -1,172 +1,171 @@
-import { useState, useRef, useEffect, useMemo, type FormEvent } from 'react';
+import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { MessageCircle, X, Send, Bot, User, Phone, Mail, Headphones } from 'lucide-react';
-
-interface Message {
-  id: number;
-  text: string;
-  sender: 'bot' | 'user';
-  time: string;
-}
+import { useWarehouseAuth, API_BASE } from '../../contexts/WarehouseAuthContext';
 
 type RecipientType = 'customer' | 'dispatcher' | 'warehouse';
 
-type DemoCustomer = { id: string; name: string };
-const demoCustomers: DemoCustomer[] = [
-  { id: 'u-customer', name: 'Phạm Thị Lan' },
-  { id: 'u-customer-2', name: 'Trần Anh Tuấn' },
-  { id: 'u-customer-3', name: 'Nguyễn Thị Mai' },
-];
+const ROLE_MAP: Record<RecipientType, string> = {
+  customer:   'CUSTOMER',
+  dispatcher: 'PLANNER',
+  warehouse:  'OPERATOR',
+};
 
-const botResponses = {
-  customer: {
-    default: 'Xin chào! Tôi là trợ lý ảo Hùng Thủy. Bạn cần hỗ trợ về đơn hàng/container nào?',
-    hello: 'Chào bạn! Mình có thể giúp tra cứu, cập nhật trạng thái hoặc hướng dẫn thao tác trong hệ thống.',
-    schedule: 'Nếu bạn cần theo dõi lịch trình, hãy cho mình biết mã container hoặc tên hãng tàu.',
-    broken: 'Hiện hệ thống ghi nhận một số container có dấu hiệu hỏng. Bạn muốn kiểm tra theo container hay theo loại hàng?',
-    storage: 'Bạn muốn xem tồn kho theo zone hay theo loại container?',
-  },
-  dispatcher: {
-    default: 'Chào anh/chị, tôi là trợ lý điều phối. Mình có thể hỗ trợ xem lịch & tình trạng xuất/nhập theo ngày.',
-    hello: 'Điều phối đã sẵn sàng. Anh/chị muốn kiểm tra lịch nhập hay lịch xuất?',
-    schedule: 'Anh/chị cho mình biết khoảng thời gian (từ/ngày đến/ngày) để tổng hợp.',
-    broken: 'Có một vài cảnh báo liên quan hàng hỏng. Mình có thể tổng hợp theo loại hàng để anh/chị duyệt.',
-    storage: 'Tồn kho theo zone có thể xem trong báo cáo/thống kê. Anh/chị cần khoảng thời gian nào?',
-  },
-  warehouse: {
-    default: 'Chào anh/chị, tôi là trợ lý kho. Mình có thể hỗ trợ kiểm tra tồn kho, khu vực và trạng thái container.',
-    hello: 'Kho đã sẵn sàng. Anh/chị muốn xem tồn kho theo zone hay theo loại container?',
-    schedule: 'Để lên lịch thao tác, mình cần khung thời gian và khu vực (A/B/C/D).',
-    broken: 'Về hàng hỏng: mình có thể lọc những container có cảnh báo để đội kiểm tra xử lý.',
-    storage: 'Anh/chị muốn xem tồn kho theo khu vực hay theo loại hàng?',
-  },
-} as const;
+const SEARCH_LABEL: Record<RecipientType, string> = {
+  customer:   'Tìm khách hàng',
+  dispatcher: 'Tìm điều phối',
+  warehouse:  'Tìm nhân viên kho',
+};
 
-function getResponse(text: string, recipient: RecipientType, customerName?: string): string {
-  const t = text.toLowerCase();
-  const dict = recipient === 'customer' ? botResponses.customer : recipient === 'dispatcher' ? botResponses.dispatcher : botResponses.warehouse;
+type UserItem = { userId: number; fullName: string; username: string };
+type ChatMessage = { messageId: number; senderId: number; senderName: string; description: string; createdAt: string };
+type ChatRoom = { roomId: number; roomName: string };
 
-  if (t.includes('chào') || t.includes('hello') || t.includes('hi')) return dict.hello;
-  if (t.includes('lịch') || t.includes('schedule') || t.includes('xuất') || t.includes('nhập')) return dict.schedule;
-  if (t.includes('hỏng') || t.includes('broken') || t.includes('phạt') || t.includes('đền')) return dict.broken;
-  if (t.includes('tồn') || t.includes('kho') || t.includes('storage')) return dict.storage;
-
-  if (recipient === 'customer' && customerName) {
-    return `${dict.default}\n\nKhi cần, bạn có thể nhắn: “Kiểm tra container của ${customerName}”.`;
-  }
-  return dict.default;
+function quickRepliesFor(recipient: RecipientType, selectedName?: string) {
+  if (recipient === 'dispatcher') return ['Kiểm tra lịch nhập', 'Kiểm tra lịch xuất', 'Tổng hợp hàng hỏng', 'Báo cáo tồn kho'];
+  if (recipient === 'warehouse')  return ['Xem tồn kho theo zone', 'Lọc container hàng hỏng', 'Thông tin giao ca', 'Kiểm tra lệnh xuất'];
+  return [`Kiểm tra trạng thái container của ${selectedName || 'tôi'}`, 'Theo dõi lịch trình', 'Báo cáo hàng hỏng', 'Cần hỗ trợ thủ tục'];
 }
 
-function quickRepliesFor(recipient: RecipientType, customerName?: string) {
-  if (recipient === 'dispatcher') return ['Kiểm tra lịch nhập', 'Kiểm tra lịch xuất', 'Tổng hợp hàng hỏng', 'Báo cáo tồn kho'];
-  if (recipient === 'warehouse') return ['Xem tồn kho theo zone', 'Lọc container hàng hỏng', 'Thông tin giao ca', 'Kiểm tra lệnh xuất'];
-  return [`Kiểm tra trạng thái container của ${customerName || 'tôi'}`, 'Theo dõi lịch trình', 'Báo cáo hàng hỏng', 'Cần hỗ trợ thủ tục'];
+function formatTime(iso: string) {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
 }
 
 export default function ChatBox() {
-  const [isOpen, setIsOpen] = useState(false);
+  const { accessToken, user } = useWarehouseAuth();
+
+  const headers = useMemo(() => ({
+    'Content-Type': 'application/json',
+    ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+  }), [accessToken]);
+
+  const [isOpen, setIsOpen]               = useState(false);
   const [recipientType, setRecipientType] = useState<RecipientType>('customer');
-  const [customerId, setCustomerId] = useState(demoCustomers[0].id);
+  const [userQuery, setUserQuery]         = useState('');
+  const [users, setUsers]                 = useState<UserItem[]>([]);
+  const [loadingUsers, setLoadingUsers]   = useState(false);
+  const [selectedUser, setSelectedUser]   = useState<UserItem | null>(null);
+  const [activeRoom, setActiveRoom]       = useState<ChatRoom | null>(null);
+  const [messages, setMessages]           = useState<ChatMessage[]>([]);
+  const [loadingRoom, setLoadingRoom]     = useState(false);
+  const [inputText, setInputText]         = useState('');
+  const [sending, setSending]             = useState(false);
 
-  const activeCustomer = useMemo(
-    () => demoCustomers.find((c) => c.id === customerId) || demoCustomers[0],
-    [customerId],
-  );
-  const activeKey = recipientType === 'customer' ? `customer:${activeCustomer.id}` : recipientType;
-
-  const [threads, setThreads] = useState<Record<string, Message[]>>(() => {
-    const c = demoCustomers[0];
-    return {
-      [`customer:${c.id}`]: [
-        {
-          id: 1,
-          text: `Xin chào! Tôi là trợ lý ảo của **Hùng Thủy**. Bạn muốn nhắn với khách hàng nào?`,
-          sender: 'bot',
-          time: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
-        },
-      ],
-    };
-  });
-  const messages = threads[activeKey] || [];
-  const [customerQuery, setCustomerQuery] = useState('');
-  const filteredCustomers = useMemo(() => {
-    const query = customerQuery.trim().toLowerCase();
-    if (!query) return demoCustomers;
-    return demoCustomers.filter((customer) => customer.name.toLowerCase().includes(query));
-  }, [customerQuery]);
-
-  // Ensure each recipient has its own chat thread for demo.
-  useEffect(() => {
-    setThreads((prev) => {
-      if (prev[activeKey]) return prev;
-      const recipientLabel = recipientType === 'customer' ? 'khách hàng' : recipientType === 'dispatcher' ? 'điều phối' : 'nhân viên kho';
-      const nextMsgs: Message[] = [
-        {
-          id: 1,
-          text: `Xin chào! Tôi là trợ lý ảo Hùng Thủy. Bạn muốn nhắn với ${recipientLabel}?`,
-          sender: 'bot',
-          time: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
-        },
-      ];
-      return { ...prev, [activeKey]: nextMsgs };
-    });
-  }, [activeKey, recipientType, activeCustomer.name]);
-  const [inputText, setInputText] = useState('');
-  const [isTyping, setIsTyping] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef       = useRef<HTMLInputElement>(null);
 
+  // ── Fetch users when role or query changes ─────────────────────────────────
+  const fetchUsers = useCallback(async (role: RecipientType, query: string) => {
+    if (!accessToken) return;
+    setLoadingUsers(true);
+    try {
+      const roleName = ROLE_MAP[role];
+      const res = await fetch(
+        `${API_BASE}/chat/users?roleName=${roleName}&keyword=${encodeURIComponent(query)}&size=10`,
+        { headers },
+      );
+      const d = await res.json();
+      if (res.ok) setUsers((d.data?.content || []) as UserItem[]);
+    } catch { /* ignore */ } finally {
+      setLoadingUsers(false);
+    }
+  }, [accessToken, headers]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    fetchUsers(recipientType, userQuery);
+  }, [isOpen, recipientType, userQuery]);
+
+  // Reset when role changes
+  useEffect(() => {
+    setUserQuery('');
+    setSelectedUser(null);
+    setActiveRoom(null);
+    setMessages([]);
+  }, [recipientType]);
+
+  // ── Open conversation when user is selected ────────────────────────────────
+  useEffect(() => {
+    if (!selectedUser || !accessToken) {
+      setActiveRoom(null);
+      setMessages([]);
+      return;
+    }
+    let cancelled = false;
+    const openRoom = async () => {
+      setLoadingRoom(true);
+      try {
+        const res = await fetch(`${API_BASE}/chat/conversations`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ targetUserId: selectedUser.userId }),
+        });
+        const d = await res.json();
+        if (!res.ok || cancelled) return;
+        const room = d.data as ChatRoom;
+        setActiveRoom(room);
+      } catch { /* ignore */ } finally {
+        if (!cancelled) setLoadingRoom(false);
+      }
+    };
+    openRoom();
+    return () => { cancelled = true; };
+  }, [selectedUser, accessToken]);
+
+  // ── Load & poll messages ───────────────────────────────────────────────────
+  const fetchMessages = useCallback(async (roomId: number) => {
+    if (!accessToken) return;
+    try {
+      const res = await fetch(`${API_BASE}/chat/rooms/${roomId}/messages?size=50`, { headers });
+      const d = await res.json();
+      if (res.ok) {
+        const content = (d.data?.content || []) as ChatMessage[];
+        setMessages([...content].reverse()); // backend returns DESC; show oldest-first
+      }
+    } catch { /* ignore */ }
+  }, [accessToken, headers]);
+
+  useEffect(() => {
+    if (!activeRoom) return;
+    fetchMessages(activeRoom.roomId);
+    const id = setInterval(() => fetchMessages(activeRoom.roomId), 5000);
+    return () => clearInterval(id);
+  }, [activeRoom, fetchMessages]);
+
+  // ── Auto-scroll ────────────────────────────────────────────────────────────
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, isTyping]);
+  }, [messages]);
 
   useEffect(() => {
-    if (isOpen && inputRef.current) {
-      setTimeout(() => inputRef.current?.focus(), 300);
-    }
+    if (isOpen) setTimeout(() => inputRef.current?.focus(), 300);
   }, [isOpen]);
 
+  // ── Send message ───────────────────────────────────────────────────────────
   const sendMessage = async (text: string) => {
-    if (!text.trim()) return;
-
-    const keyAtSend = activeKey;
-    const recipientAtSend = recipientType;
-    const customerNameAtSend = activeCustomer.name;
-
-    const userMsg: Message = {
-      id: Date.now(),
-      text: text.trim(),
-      sender: 'user',
-      time: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
-    };
-
-    setThreads((prev) => ({
-      ...prev,
-      [keyAtSend]: [...(prev[keyAtSend] || []), userMsg],
-    }));
+    if (!text.trim() || !activeRoom || sending) return;
     setInputText('');
-    setIsTyping(true);
-
-    await new Promise(resolve => setTimeout(resolve, 800 + Math.random() * 700));
-
-    const botMsg: Message = {
-      id: Date.now() + 1,
-      text: getResponse(text, recipientAtSend, recipientAtSend === 'customer' ? customerNameAtSend : undefined),
-      sender: 'bot',
-      time: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
-    };
-
-    setIsTyping(false);
-    setThreads((prev) => ({
-      ...prev,
-      [keyAtSend]: [...(prev[keyAtSend] || []), botMsg],
-    }));
+    setSending(true);
+    try {
+      await fetch(`${API_BASE}/chat/rooms/${activeRoom.roomId}/messages`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ description: text.trim() }),
+      });
+      await fetchMessages(activeRoom.roomId);
+    } catch { /* ignore */ } finally {
+      setSending(false);
+    }
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     sendMessage(inputText);
   };
+
+  const currentUserId = (user as any)?.userId ?? (user as any)?.id;
 
   return (
     <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end gap-3">
@@ -211,7 +210,7 @@ export default function ChatBox() {
               </div>
             </div>
 
-            {/* Recipient selector (demo) */}
+            {/* Recipient selector */}
             <div className="p-3 bg-white dark:bg-gray-800 border-b border-gray-100 dark:border-gray-700">
               <div className="flex flex-col gap-3">
                 <div className="flex items-center justify-between gap-3">
@@ -227,96 +226,96 @@ export default function ChatBox() {
                   </select>
                 </div>
 
-                {recipientType === 'customer' && (
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="text-xs font-semibold text-gray-600 dark:text-gray-200">Tìm khách hàng</div>
-                      <span className="text-xs text-gray-400">{filteredCustomers.length} kết quả</span>
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="text-xs font-semibold text-gray-600 dark:text-gray-200">
+                      {SEARCH_LABEL[recipientType]}
                     </div>
-                    <input
-                      value={customerQuery}
-                      onChange={(e) => setCustomerQuery(e.target.value)}
-                      placeholder="Nhập tên khách hàng"
-                      className="w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 px-3 py-2 text-sm"
-                    />
-                    <div className="flex flex-wrap gap-2">
-                      {filteredCustomers.map((customer) => (
-                        <button
-                          key={customer.id}
-                          type="button"
-                          onClick={() => setCustomerId(customer.id)}
-                          className={`text-xs px-3 py-1.5 rounded-full border ${customerId === customer.id ? 'bg-blue-900 text-white border-blue-900' : 'bg-white text-gray-700 border-gray-200 dark:bg-gray-900 dark:text-gray-200 dark:border-gray-700'}`}
-                        >
-                          {customer.name}
-                        </button>
-                      ))}
-                    </div>
+                    {loadingUsers && <span className="text-xs text-gray-400">Đang tải...</span>}
+                    {!loadingUsers && <span className="text-xs text-gray-400">{users.length} kết quả</span>}
                   </div>
-                )}
+                  <input
+                    value={userQuery}
+                    onChange={(e) => setUserQuery(e.target.value)}
+                    placeholder="Nhập tên để tìm kiếm"
+                    className="w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 px-3 py-2 text-sm"
+                  />
+                  <div className="flex flex-wrap gap-2 max-h-[60px] overflow-y-auto">
+                    {users.map((u) => (
+                      <button
+                        key={u.userId}
+                        type="button"
+                        onClick={() => setSelectedUser(u)}
+                        className={`text-xs px-3 py-1.5 rounded-full border ${
+                          selectedUser?.userId === u.userId
+                            ? 'bg-blue-900 text-white border-blue-900'
+                            : 'bg-white text-gray-700 border-gray-200 dark:bg-gray-900 dark:text-gray-200 dark:border-gray-700'
+                        }`}
+                      >
+                        {u.fullName || u.username}
+                      </button>
+                    ))}
+                    {!loadingUsers && users.length === 0 && (
+                      <span className="text-xs text-gray-400">Không tìm thấy người dùng.</span>
+                    )}
+                  </div>
+                </div>
               </div>
             </div>
 
             {/* Messages */}
             <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-gray-50">
-              {messages.map((msg) => (
-                <motion.div
-                  key={msg.id}
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className={`flex gap-2 ${msg.sender === 'user' ? 'flex-row-reverse' : 'flex-row'}`}
-                >
-                  <div className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 ${
-                    msg.sender === 'bot' ? 'bg-blue-900' : 'bg-gray-400'
-                  }`}>
-                    {msg.sender === 'bot' ? <Bot className="w-4 h-4 text-white" /> : <User className="w-4 h-4 text-white" />}
-                  </div>
-                  <div className={`max-w-[75%] ${msg.sender === 'user' ? 'items-end' : 'items-start'} flex flex-col gap-1`}>
-                    <div className={`px-3 py-2 rounded-2xl text-sm leading-relaxed whitespace-pre-line ${
-                      msg.sender === 'bot'
-                        ? 'bg-white text-gray-800 shadow-sm rounded-tl-sm'
-                        : 'bg-blue-900 text-white rounded-tr-sm'
-                    }`}>
-                      {msg.text}
-                    </div>
-                    <span className="text-xs text-gray-400">{msg.time}</span>
-                  </div>
-                </motion.div>
-              ))}
-
-              {/* Typing Indicator */}
-              {isTyping && (
-                <motion.div
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="flex gap-2 items-end"
-                >
-                  <div className="w-7 h-7 rounded-full bg-blue-900 flex items-center justify-center">
-                    <Bot className="w-4 h-4 text-white" />
-                  </div>
-                  <div className="bg-white px-4 py-3 rounded-2xl rounded-tl-sm shadow-sm">
-                    <div className="flex gap-1">
-                      {[0, 1, 2].map(i => (
-                        <motion.div
-                          key={i}
-                          className="w-2 h-2 bg-gray-400 rounded-full"
-                          animate={{ y: [0, -6, 0] }}
-                          transition={{ duration: 0.6, repeat: Infinity, delay: i * 0.15 }}
-                        />
-                      ))}
-                    </div>
-                  </div>
-                </motion.div>
+              {loadingRoom && (
+                <div className="text-xs text-gray-400 text-center pt-4">Đang mở cuộc trò chuyện...</div>
               )}
+              {!loadingRoom && !activeRoom && (
+                <div className="text-xs text-gray-400 text-center pt-4">Chọn người dùng để bắt đầu trò chuyện.</div>
+              )}
+              {!loadingRoom && activeRoom && messages.length === 0 && (
+                <div className="text-xs text-gray-400 text-center pt-4">Chưa có tin nhắn nào.</div>
+              )}
+
+              {messages.map((msg) => {
+                const isMe = msg.senderId === currentUserId;
+                return (
+                  <motion.div
+                    key={msg.messageId}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className={`flex gap-2 ${isMe ? 'flex-row-reverse' : 'flex-row'}`}
+                  >
+                    <div className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 ${
+                      isMe ? 'bg-gray-400' : 'bg-blue-900'
+                    }`}>
+                      {isMe ? <User className="w-4 h-4 text-white" /> : <Bot className="w-4 h-4 text-white" />}
+                    </div>
+                    <div className={`max-w-[75%] ${isMe ? 'items-end' : 'items-start'} flex flex-col gap-1`}>
+                      {!isMe && (
+                        <span className="text-[10px] text-gray-500 px-1">{msg.senderName}</span>
+                      )}
+                      <div className={`px-3 py-2 rounded-2xl text-sm leading-relaxed whitespace-pre-line ${
+                        isMe
+                          ? 'bg-blue-900 text-white rounded-tr-sm'
+                          : 'bg-white text-gray-800 shadow-sm rounded-tl-sm'
+                      }`}>
+                        {msg.description}
+                      </div>
+                      <span className="text-xs text-gray-400">{formatTime(msg.createdAt)}</span>
+                    </div>
+                  </motion.div>
+                );
+              })}
               <div ref={messagesEndRef} />
             </div>
 
             {/* Quick Replies */}
             <div className="px-3 py-2 bg-white border-t border-gray-100 flex gap-1.5 overflow-x-auto">
-              {quickRepliesFor(recipientType, activeCustomer.name).map((reply) => (
+              {quickRepliesFor(recipientType, selectedUser?.fullName).map((reply) => (
                 <button
                   key={reply}
                   onClick={() => sendMessage(reply)}
-                  className="flex-shrink-0 text-xs px-3 py-1.5 border border-blue-200 text-blue-700 rounded-full hover:bg-blue-50 transition-colors whitespace-nowrap"
+                  disabled={!activeRoom}
+                  className="flex-shrink-0 text-xs px-3 py-1.5 border border-blue-200 text-blue-700 rounded-full hover:bg-blue-50 transition-colors whitespace-nowrap disabled:opacity-40"
                 >
                   {reply}
                 </button>
@@ -330,12 +329,13 @@ export default function ChatBox() {
                 type="text"
                 value={inputText}
                 onChange={(e) => setInputText(e.target.value)}
-                placeholder="Nhập tin nhắn..."
-                className="flex-1 border border-gray-200 rounded-full px-4 py-2 text-sm focus:outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                placeholder={activeRoom ? 'Nhập tin nhắn...' : 'Chọn người dùng trước...'}
+                disabled={!activeRoom}
+                className="flex-1 border border-gray-200 rounded-full px-4 py-2 text-sm focus:outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 disabled:bg-gray-50"
               />
               <button
                 type="submit"
-                disabled={!inputText.trim()}
+                disabled={!inputText.trim() || !activeRoom || sending}
                 className="w-9 h-9 bg-blue-900 hover:bg-blue-800 disabled:bg-gray-200 rounded-full flex items-center justify-center transition-colors flex-shrink-0"
               >
                 <Send className="w-4 h-4 text-white" />
@@ -363,16 +363,6 @@ export default function ChatBox() {
             </motion.div>
           )}
         </AnimatePresence>
-        {/* Notification dot */}
-        {!isOpen && (
-          <motion.div
-            className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full flex items-center justify-center"
-            animate={{ scale: [1, 1.3, 1] }}
-            transition={{ duration: 2, repeat: Infinity }}
-          >
-            <span className="text-white text-xs font-bold">1</span>
-          </motion.div>
-        )}
       </motion.button>
     </div>
   );

@@ -22,8 +22,7 @@ import {
 } from '../../../../components/ui/table';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '../../../../components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../../../components/ui/select';
-import { useWarehouseAuth } from '../../../../contexts/WarehouseAuthContext';
-import { projectId, publicAnonKey } from '../../../../utils/supabase/info';
+import { useWarehouseAuth, API_BASE } from '../../../../contexts/WarehouseAuthContext';
 
 type ShippingCompany = {
   id: string;
@@ -70,11 +69,11 @@ function formatDate(iso?: string) {
 
 export default function AdminSchedulesSection() {
   const { accessToken } = useWarehouseAuth();
-  const apiUrl = `https://${projectId}.supabase.co/functions/v1/make-server-ce1eb60c`;
+  const apiUrl = API_BASE;
   const headers = useMemo(
     () => ({
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${accessToken || publicAnonKey}`,
+      ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
     }),
     [accessToken],
   );
@@ -110,15 +109,19 @@ export default function AdminSchedulesSection() {
     setError('');
     try {
       const [sRes, cRes] = await Promise.all([
-        fetch(`${apiUrl}/schedules`, { headers }),
-        fetch(`${apiUrl}/shipping-companies`, { headers }),
+        fetch(`${apiUrl}/admin/schedules`, { headers }),
+        fetch(`${apiUrl}/admin/shipping-companies`, { headers }),
       ]);
       const sData = await sRes.json();
       const cData = await cRes.json();
-      if (!sRes.ok) throw new Error(sData.error || 'Lỗi lấy schedules');
-      if (!cRes.ok) throw new Error(cData.error || 'Lỗi lấy hãng tàu');
-      setItems(sData.items || []);
-      setShippingCompanies(cData.items || []);
+      if (!sRes.ok) throw new Error(sData.message || 'Lỗi lấy schedules');
+      if (!cRes.ok) throw new Error(cData.message || 'Lỗi lấy hãng tàu');
+      type RawSchedule = { scheduleId: number; companyName: string; shipName: string; type: string; timeStart: string; timeEnd: string; location: string; containers: number; status: string; createdAt?: string; updatedAt?: string };
+      const rawS: RawSchedule[] = sData.data || [];
+      setItems(rawS.map(it => ({ id: String(it.scheduleId), company_name: it.companyName, ship_name: it.shipName, type: it.type, time_start: it.timeStart, time_end: it.timeEnd, location: it.location, containers: it.containers, status: it.status, created_at: it.createdAt, updated_at: it.updatedAt })));
+      type RawCompany = { companyId: number; name: string; phone?: string; email?: string; address?: string; createdAt?: string };
+      const rawC: RawCompany[] = cData.data || [];
+      setShippingCompanies(rawC.map(it => ({ id: String(it.companyId), name: it.name, phone: it.phone, email: it.email, address: it.address, created_at: it.createdAt })));
     } catch (e: any) {
       setError(e.message || 'Lỗi không xác định');
     } finally {
@@ -170,7 +173,7 @@ export default function AdminSchedulesSection() {
     try {
       const res = await fetch(`${apiUrl}/admin/seed/schedules`, { method: 'POST', headers });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Lỗi seed schedules');
+      if (!res.ok) throw new Error(data.message || 'Lỗi seed schedules');
       setSeedMessage(data.message || 'Seed thành công');
       await fetchAll();
     } catch (e: any) {
@@ -182,19 +185,19 @@ export default function AdminSchedulesSection() {
 
   const submitCreate = async () => {
     const payload = {
-      company_name: form.company_name,
-      ship_name: form.ship_name,
+      companyName: form.company_name,
+      shipName: form.ship_name,
       type: form.type,
-      time_start: form.time_start ? new Date(form.time_start).toISOString() : '',
-      time_end: form.time_end ? new Date(form.time_end).toISOString() : '',
+      timeStart: form.time_start ? new Date(form.time_start).toISOString() : '',
+      timeEnd: form.time_end ? new Date(form.time_end).toISOString() : '',
       location: form.location,
       containers: safeNumber(form.containers),
       status: form.status,
     };
     try {
-      const res = await fetch(`${apiUrl}/schedules`, { method: 'POST', headers, body: JSON.stringify(payload) });
+      const res = await fetch(`${apiUrl}/admin/schedules`, { method: 'POST', headers, body: JSON.stringify(payload) });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Lỗi thêm lịch');
+      if (!res.ok) throw new Error(data.message || 'Lỗi thêm lịch');
       setOpenCreate(false);
       resetForm();
       await fetchAll();
@@ -221,19 +224,19 @@ export default function AdminSchedulesSection() {
   const submitEdit = async () => {
     if (!editing) return;
     const payload = {
-      company_name: form.company_name,
-      ship_name: form.ship_name,
+      companyName: form.company_name,
+      shipName: form.ship_name,
       type: form.type,
-      time_start: form.time_start ? new Date(form.time_start).toISOString() : editing.time_start,
-      time_end: form.time_end ? new Date(form.time_end).toISOString() : editing.time_end,
+      timeStart: form.time_start ? new Date(form.time_start).toISOString() : editing.time_start,
+      timeEnd: form.time_end ? new Date(form.time_end).toISOString() : editing.time_end,
       location: form.location,
       containers: safeNumber(form.containers),
       status: form.status,
     };
     try {
-      const res = await fetch(`${apiUrl}/schedules/${editing.id}`, { method: 'PATCH', headers, body: JSON.stringify(payload) });
+      const res = await fetch(`${apiUrl}/admin/schedules/${editing.id}`, { method: 'PUT', headers, body: JSON.stringify(payload) });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Lỗi cập nhật lịch');
+      if (!res.ok) throw new Error(data.message || 'Lỗi cập nhật lịch');
       setOpenEdit(false);
       setEditing(null);
       resetForm();
@@ -247,9 +250,9 @@ export default function AdminSchedulesSection() {
     const ok = confirm('Bạn có chắc chắn muốn xóa lịch trình này không?');
     if (!ok) return;
     try {
-      const res = await fetch(`${apiUrl}/schedules/${id}`, { method: 'DELETE', headers });
+      const res = await fetch(`${apiUrl}/admin/schedules/${id}`, { method: 'DELETE', headers });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Lỗi xóa lịch');
+      if (!res.ok) throw new Error(data.message || 'Lỗi xóa lịch');
       await fetchAll();
     } catch (e: any) {
       alert(e.message || 'Lỗi không xác định');

@@ -13,8 +13,7 @@ import {
   TableRow,
 } from '../../../../components/ui/table';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '../../../../components/ui/dialog';
-import { useWarehouseAuth } from '../../../../contexts/WarehouseAuthContext';
-import { projectId, publicAnonKey } from '../../../../utils/supabase/info';
+import { useWarehouseAuth, API_BASE } from '../../../../contexts/WarehouseAuthContext';
 
 type ShippingCompany = {
   id: string;
@@ -40,12 +39,12 @@ function formatDate(iso?: string) {
 
 export default function AdminShippingCompaniesSection() {
   const { accessToken } = useWarehouseAuth();
-  const apiUrl = `https://${projectId}.supabase.co/functions/v1/make-server-ce1eb60c`;
+  const apiUrl = API_BASE;
 
   const headers = useMemo(
     () => ({
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${accessToken || publicAnonKey}`,
+      ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
     }),
     [accessToken],
   );
@@ -74,10 +73,11 @@ export default function AdminShippingCompaniesSection() {
     setLoading(true);
     setError('');
     try {
-      const res = await fetch(`${apiUrl}/shipping-companies`, { headers });
+      const res = await fetch(`${apiUrl}/admin/shipping-companies`, { headers });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Lỗi lấy hãng tàu');
-      setItems(data.items || []);
+      if (!res.ok) throw new Error(data.message || 'Lỗi lấy hãng tàu');
+      const raw: { companyId: number; name: string; phone?: string; email?: string; address?: string; createdAt?: string }[] = data.data || [];
+      setItems(raw.map(it => ({ id: String(it.companyId), name: it.name, phone: it.phone, email: it.email, address: it.address, created_at: it.createdAt })));
     } catch (e: any) {
       setError(e.message || 'Lỗi không xác định');
     } finally {
@@ -102,7 +102,7 @@ export default function AdminShippingCompaniesSection() {
     try {
       const res = await fetch(`${apiUrl}/admin/seed/shipping-companies`, { method: 'POST', headers });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Lỗi seed hãng tàu');
+      if (!res.ok) throw new Error(data.message || 'Lỗi seed hãng tàu');
       setSeedMessage(data.message || 'Seed thành công');
       await fetchItems();
     } catch (e: any) {
@@ -116,9 +116,9 @@ export default function AdminShippingCompaniesSection() {
     try {
       if (!form.name.trim()) return alert('Tên hãng tàu không được để trống');
       const payload = { name: form.name };
-      const res = await fetch(`${apiUrl}/shipping-companies`, { method: 'POST', headers, body: JSON.stringify(payload) });
+      const res = await fetch(`${apiUrl}/admin/shipping-companies`, { method: 'POST', headers, body: JSON.stringify(payload) });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Lỗi thêm hãng tàu');
+      if (!res.ok) throw new Error(data.message || 'Lỗi thêm hãng tàu');
       setOpenCreate(false);
       setTempId('');
       setForm({ name: '', phone: '', email: '', address: '' });
@@ -144,9 +144,9 @@ export default function AdminShippingCompaniesSection() {
     try {
       if (!form.name.trim()) return alert('Tên hãng tàu không được để trống');
       const payload = { name: form.name };
-      const res = await fetch(`${apiUrl}/shipping-companies/${editing.id}`, { method: 'PATCH', headers, body: JSON.stringify(payload) });
+      const res = await fetch(`${apiUrl}/admin/shipping-companies/${editing.id}`, { method: 'PUT', headers, body: JSON.stringify(payload) });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Lỗi cập nhật hãng tàu');
+      if (!res.ok) throw new Error(data.message || 'Lỗi cập nhật hãng tàu');
       setOpenEdit(false);
       setEditing(null);
       setForm({ name: '', phone: '', email: '', address: '' });
@@ -160,9 +160,9 @@ export default function AdminShippingCompaniesSection() {
     const ok = confirm('Bạn có chắc chắn muốn xóa hãng tàu này không?');
     if (!ok) return;
     try {
-      const res = await fetch(`${apiUrl}/shipping-companies/${id}`, { method: 'DELETE', headers });
+      const res = await fetch(`${apiUrl}/admin/shipping-companies/${id}`, { method: 'DELETE', headers });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Lỗi xóa hãng tàu');
+      if (!res.ok) throw new Error(data.message || 'Lỗi xóa hãng tàu');
       await fetchItems();
     } catch (e: any) {
       alert(e.message || 'Lỗi không xác định');

@@ -1,95 +1,236 @@
-import { useMemo, useState } from 'react';
-import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis, Pie, PieChart, Cell } from 'recharts';
+import { useEffect, useMemo, useState } from 'react';
+import {
+  Bar, BarChart, CartesianGrid, ResponsiveContainer,
+  Tooltip, XAxis, YAxis, Pie, PieChart, Cell,
+} from 'recharts';
+import { useWarehouseAuth, API_BASE } from '../../../contexts/WarehouseAuthContext';
 import PageHeader from '../../../components/warehouse/PageHeader';
 
-const months = ['T1','T2','T3','T4','T5','T6','T7','T8','T9','T10','T11','T12'];
-const revenueData = months.map((name, index) => ({ name, value: [48,52,45,61,55,70,73,78,82,85,95,100][index] }));
-const orderData = months.map((name, index) => ({ name, value: [320,380,340,430,400,460,450,520,540,570,610,650][index] }));
-const pieData = [
-  { name: 'Hàng Khô', value: 50, color: '#10b981' },
-  { name: 'Hàng Lạnh', value: 30, color: '#06b6d4' },
-  { name: 'Hàng Nguy Hiểm', value: 10, color: '#a855f7' },
-  { name: 'Hàng Dễ Vỡ', value: 10, color: '#3b82f6' },
-];
-const damageRows = [
-  { don: 'ORD-3', loai: 'Hàng Dễ Vỡ', moTa: 'Vỡ 3 kiện hàng thủy tinh', ngay: '05/01/2026', phi: '₫4.5M', trangThai: 'Chờ xử lý', badge: 'badge-danger' },
-  { don: 'ORD-5', loai: 'Hàng Lạnh', moTa: 'Hỏng máy làm lạnh, hàng bị tan', ngay: '12/01/2026', phi: '₫8M', trangThai: 'Đang giải quyết', badge: 'badge-warning' },
-  { don: 'ORD-7', loai: 'Hàng Khô', moTa: 'Bao bì bị rách ướt do dột mái', ngay: '18/01/2026', phi: '₫2.1M', trangThai: 'Đã giải quyết', badge: 'badge-success' },
-  { don: 'ORD-2', loai: 'Hàng Nguy Hiểm', moTa: 'Thùng hóa chất bị rỉ nhẹ', ngay: '22/02/2026', phi: '₫3.4M', trangThai: 'Chờ xử lý', badge: 'badge-danger' },
-  { don: 'ORD-9', loai: 'Hàng Dễ Vỡ', moTa: 'Hỏng 2 màn hình LCD', ngay: '28/02/2026', phi: '₫0M', trangThai: 'Miễn phí', badge: 'badge-success' },
-];
-
-const REPORT_TABS = [
-  { id: 'tongquan', label: 'Tổng quan' },
-  { id: 'hanghong', label: 'Tổng hợp hàng hỏng' },
-  { id: 'kho-lanh', label: 'Tổng hợp kho lạnh' },
-  { id: 'kho-kho', label: 'Tổng hợp kho khô' },
-  { id: 'kho-de-vo', label: 'Tổng hợp kho dễ vỡ' },
-  { id: 'kho-khac', label: 'Tổng hợp kho khác' },
-] as const;
-
-type ReportTabKey = (typeof REPORT_TABS)[number]['id'];
-
-const reportData: Record<Exclude<ReportTabKey, 'tongquan'>, { title: string; subtitle: string; rows: typeof damageRows }> = {
-  hanghong: {
-    title: 'Tổng hợp hàng hỏng',
-    subtitle: 'Phân loại các hàng hỏng theo đơn hàng',
-    rows: damageRows,
-  },
-  'kho-lanh': {
-    title: 'Tổng hợp kho lạnh',
-    subtitle: 'Tổng hợp hiệu suất và sự cố của kho lạnh',
-    rows: [
-      { don: 'KLT-01', loai: 'Kho lạnh', moTa: 'Nhiệt độ ổn định 2°C', ngay: '01/03/2026', phi: '₫12M', trangThai: 'Bình thường', badge: 'badge-success' },
-      { don: 'KLT-02', loai: 'Kho lạnh', moTa: 'Đã ghi nhận rò rỉ ẩm', ngay: '09/03/2026', phi: '₫4M', trangThai: 'Đang xử lý', badge: 'badge-warning' },
-      { don: 'KLT-03', loai: 'Kho lạnh', moTa: 'Thiết bị lạnh cần bảo trì', ngay: '15/03/2026', phi: '₫6M', trangThai: 'Chờ xử lý', badge: 'badge-warning' },
-    ],
-  },
-  'kho-kho': {
-    title: 'Tổng hợp kho khô',
-    subtitle: 'Tổng hợp hiệu suất và sự cố của kho khô',
-    rows: [
-      { don: 'KHK-01', loai: 'Kho khô', moTa: 'Lưu kho hàng khô an toàn', ngay: '02/03/2026', phi: '₫8M', trangThai: 'Bình thường', badge: 'badge-success' },
-      { don: 'KHK-02', loai: 'Kho khô', moTa: 'Phát hiện ẩm thấp vùng góc', ngay: '08/03/2026', phi: '₫3.5M', trangThai: 'Đang xử lý', badge: 'badge-warning' },
-      { don: 'KHK-03', loai: 'Kho khô', moTa: 'Cần điều chỉnh độ thông gió', ngay: '20/03/2026', phi: '₫2.4M', trangThai: 'Chờ xử lý', badge: 'badge-warning' },
-    ],
-  },
-  'kho-de-vo': {
-    title: 'Tổng hợp kho dễ vỡ',
-    subtitle: 'Tổng hợp quản lý hàng dễ vỡ và rủi ro',
-    rows: [
-      { don: 'KDV-01', loai: 'Kho dễ vỡ', moTa: 'Đóng gói bổ sung cho hàng thủy tinh', ngay: '04/03/2026', phi: '₫9M', trangThai: 'Bình thường', badge: 'badge-success' },
-      { don: 'KDV-02', loai: 'Kho dễ vỡ', moTa: 'Hỏng 1 kiện do va chạm', ngay: '14/03/2026', phi: '₫5.5M', trangThai: 'Đang xử lý', badge: 'badge-warning' },
-      { don: 'KDV-03', loai: 'Kho dễ vỡ', moTa: 'Tăng cường đệm lót', ngay: '18/03/2026', phi: '₫3.2M', trangThai: 'Bình thường', badge: 'badge-success' },
-    ],
-  },
-  'kho-khac': {
-    title: 'Tổng hợp kho khác',
-    subtitle: 'Tổng hợp các kho đặc thù và dịch vụ kèm theo',
-    rows: [
-      { don: 'KHKC-01', loai: 'Kho khác', moTa: 'Bảo quản hàng nông sản', ngay: '06/03/2026', phi: '₫7M', trangThai: 'Bình thường', badge: 'badge-success' },
-      { don: 'KHKC-02', loai: 'Kho khác', moTa: 'Tiếp nhận lô hàng bao bì đặc biệt', ngay: '12/03/2026', phi: '₫4.8M', trangThai: 'Hoàn thành', badge: 'badge-success' },
-      { don: 'KHKC-03', loai: 'Kho khác', moTa: 'Cần kiểm tra an toàn PCCC', ngay: '19/03/2026', phi: '₫3M', trangThai: 'Đang xử lý', badge: 'badge-warning' },
-    ],
-  },
+/* ─── Types ─────────────────────────────────────────────────── */
+type RevenueReport = {
+  totalInvoices: number;
+  totalAmount: number;
+  overdueAmount: number;
+  overdueInvoices: number;
+};
+type DailyGate = { date: string; gateIn: number; gateOut: number };
+type GateReport = { totalGateIn: number; totalGateOut: number; daily: DailyGate[] };
+type InventoryReport = {
+  totalContainers: number;
+  byStatus: Record<string, number>;
+  byCargoType: Record<string, number>;
+  byContainerType: Record<string, number>;
+};
+type OrderReport = { totalOrders: number; ordersInPeriod: number; byStatus: Record<string, number> };
+type ZoneReport = { totalCapacity: number; totalOccupied: number; overallOccupancyRate: number };
+type AlertItem = {
+  alertId: number; zoneId?: number; zoneName?: string;
+  levelName?: string; description?: string; createdAt?: string; status?: number;
+};
+type ContainerItem = {
+  containerId: string; containerTypeName?: string; statusName?: string;
+  cargoTypeName?: string; grossWeight?: number; createdAt?: string;
 };
 
-function parseMoney(value: string) {
-  const normalized = value.replace(/[₫,]/g, '').replace(/M/g, '000000').replace(/K/g, '000');
-  const digits = normalized.match(/[0-9]+/g);
-  return digits ? Number(digits.join('')) : 0;
+/* ─── Constants ─────────────────────────────────────────────── */
+const PIE_COLORS = ['#10b981', '#06b6d4', '#a855f7', '#3b82f6', '#f59e0b', '#ef4444', '#84cc16'];
+
+const REPORT_TABS = [
+  { id: 'tongquan',  label: 'Tổng quan' },
+  { id: 'hanghong',  label: 'Tổng hợp hàng hỏng' },
+  { id: 'kho-lanh',  label: 'Tổng hợp kho lạnh' },
+  { id: 'kho-kho',   label: 'Tổng hợp kho khô' },
+  { id: 'kho-de-vo', label: 'Tổng hợp kho dễ vỡ' },
+  { id: 'kho-khac',  label: 'Tổng hợp kho khác' },
+] as const;
+
+type TabId = (typeof REPORT_TABS)[number]['id'];
+
+const KHO_KEYWORDS: Record<string, string[]> = {
+  'kho-lanh':  ['lạnh', 'lanh', 'cold', 'reefer'],
+  'kho-kho':   ['khô', 'kho'],
+  'kho-de-vo': ['vỡ', 'vo', 'fragile'],
+};
+
+function matchesKho(cargoTypeName: string | undefined, tabId: string): boolean {
+  if (!cargoTypeName) return tabId === 'kho-khac';
+  const lower = cargoTypeName.toLowerCase();
+  const khoKeys = Object.values(KHO_KEYWORDS).flat();
+  if (tabId === 'kho-khac') {
+    return !khoKeys.some((k) => lower.includes(k));
+  }
+  return (KHO_KEYWORDS[tabId] || []).some((k) => lower.includes(k));
 }
 
+function getCargoCountForTab(byCargoType: Record<string, number> | undefined, tabId: string): number {
+  if (!byCargoType) return 0;
+  return Object.entries(byCargoType).reduce((sum, [name, count]) => {
+    return matchesKho(name, tabId) ? sum + count : sum;
+  }, 0);
+}
+
+function getDefaultDates() {
+  const now = new Date();
+  const from = `${now.getFullYear()}-01-01`;
+  const to = now.toISOString().slice(0, 10);
+  return { from, to };
+}
+
+/* ─── Component ─────────────────────────────────────────────── */
 export default function BaoCaoThongKe() {
-  const [tab, setTab] = useState<ReportTabKey>('tongquan');
-  const [filterHang, setFilterHang] = useState('all');
+  const { accessToken } = useWarehouseAuth();
+  const headers = useMemo(() => ({
+    'Content-Type': 'application/json',
+    ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+  }), [accessToken]);
 
-  const activeReport = tab === 'tongquan' ? undefined : reportData[tab as Exclude<ReportTabKey, 'tongquan'>];
+  const def = getDefaultDates();
+  const [tab, setTab]         = useState<TabId>('tongquan');
+  const [from, setFrom]       = useState(def.from);
+  const [to, setTo]           = useState(def.to);
 
-  const filteredRows = useMemo(() => {
-    if (filterHang === 'all') return damageRows;
-    return damageRows.filter((row) => row.loai.includes(filterHang));
-  }, [filterHang]);
+  // shared inventory (loaded once)
+  const [inventory, setInventory] = useState<InventoryReport | null>(null);
+  const [invLoading, setInvLoading] = useState(true);
+
+  // tongquan
+  const [revenue, setRevenue]         = useState<RevenueReport | null>(null);
+  const [gateReport, setGateReport]   = useState<GateReport | null>(null);
+  const [orderReport, setOrderReport] = useState<OrderReport | null>(null);
+  const [tqLoading, setTqLoading]     = useState(false);
+  const [tqError, setTqError]         = useState('');
+
+  // hanghong
+  const [alerts, setAlerts]         = useState<AlertItem[]>([]);
+  const [alertTotal, setAlertTotal] = useState(0);
+  const [alertPage, setAlertPage]   = useState(0);
+  const [alertTotalPages, setAlertTotalPages] = useState(0);
+  const [alertLoading, setAlertLoading] = useState(false);
+  const [alertError, setAlertError] = useState('');
+
+  // kho tabs
+  const [containers, setContainers]   = useState<ContainerItem[]>([]);
+  const [khoLoading, setKhoLoading]   = useState(false);
+  const [khoError, setKhoError]       = useState('');
+
+  /* ── fetch inventory on mount ── */
+  useEffect(() => {
+    const load = async () => {
+      setInvLoading(true);
+      try {
+        const res = await fetch(`${API_BASE}/admin/reports/container-inventory`, { headers });
+        const d = await res.json();
+        if (res.ok) setInventory(d.data);
+      } catch { /* silently fail */ } finally {
+        setInvLoading(false);
+      }
+    };
+    load();
+  }, []);
+
+  /* ── fetch tongquan reports ── */
+  const fetchTongQuan = async (f = from, t = to) => {
+    setTqLoading(true);
+    setTqError('');
+    try {
+      const [revRes, gateRes, ordRes] = await Promise.all([
+        fetch(`${API_BASE}/admin/reports/revenue?from=${f}&to=${t}`, { headers }),
+        fetch(`${API_BASE}/admin/reports/gate-activity?from=${f}&to=${t}`, { headers }),
+        fetch(`${API_BASE}/admin/reports/orders?from=${f}&to=${t}`, { headers }),
+      ]);
+      const [revData, gateData, ordData] = await Promise.all([
+        revRes.json(), gateRes.json(), ordRes.json(),
+      ]);
+      if (revRes.ok)  setRevenue(revData.data);
+      if (gateRes.ok) setGateReport(gateData.data);
+      if (ordRes.ok)  setOrderReport(ordData.data);
+      if (!revRes.ok && !gateRes.ok) throw new Error(revData.message || 'Lỗi tải báo cáo');
+    } catch (e: any) {
+      setTqError(e.message || 'Lỗi không xác định');
+    } finally {
+      setTqLoading(false);
+    }
+  };
+
+  /* ── fetch alerts (hanghong) ── */
+  const fetchAlerts = async (pg = 0) => {
+    setAlertLoading(true);
+    setAlertError('');
+    try {
+      const res = await fetch(`${API_BASE}/admin/alerts?page=${pg}&size=20`, { headers });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.message || 'Lỗi tải cảnh báo');
+      setAlerts(d.data?.content || []);
+      setAlertTotal(d.data?.totalElements ?? 0);
+      setAlertTotalPages(d.data?.totalPages ?? 0);
+      setAlertPage(pg);
+    } catch (e: any) {
+      setAlertError(e.message || 'Lỗi');
+    } finally {
+      setAlertLoading(false);
+    }
+  };
+
+  /* ── fetch containers (kho tabs) ── */
+  const fetchContainers = async () => {
+    setKhoLoading(true);
+    setKhoError('');
+    try {
+      const res = await fetch(`${API_BASE}/admin/containers?page=0&size=100&sortBy=createdAt&direction=desc`, { headers });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.message || 'Lỗi tải container');
+      setContainers(d.data?.content || []);
+    } catch (e: any) {
+      setKhoError(e.message || 'Lỗi');
+    } finally {
+      setKhoLoading(false);
+    }
+  };
+
+  /* ── tab switch ── */
+  useEffect(() => {
+    if (tab === 'tongquan') fetchTongQuan();
+    else if (tab === 'hanghong') { if (alerts.length === 0) fetchAlerts(0); }
+    else if (tab.startsWith('kho-')) { if (containers.length === 0) fetchContainers(); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab]);
+
+  /* ── chart data ── */
+  const monthlyGate = useMemo(() => {
+    if (!gateReport?.daily?.length) return [];
+    const map: Record<string, { name: string; gateIn: number; gateOut: number }> = {};
+    gateReport.daily.forEach(({ date, gateIn, gateOut }) => {
+      const m = new Date(date + 'T00:00:00').getMonth() + 1;
+      const key = `T${m}`;
+      if (!map[key]) map[key] = { name: key, gateIn: 0, gateOut: 0 };
+      map[key].gateIn  += gateIn;
+      map[key].gateOut += gateOut;
+    });
+    return Object.values(map);
+  }, [gateReport]);
+
+  const pieSeries = useMemo(() => {
+    if (!inventory?.byCargoType) return [];
+    const total = Object.values(inventory.byCargoType).reduce((a, b) => a + b, 0) || 1;
+    return Object.entries(inventory.byCargoType).map(([name, count], i) => ({
+      name,
+      value: Math.round((count / total) * 100),
+      color: PIE_COLORS[i % PIE_COLORS.length],
+    }));
+  }, [inventory]);
+
+  const orderStatusData = useMemo(() => {
+    if (!orderReport?.byStatus) return [];
+    return Object.entries(orderReport.byStatus).map(([name, value]) => ({ name, value }));
+  }, [orderReport]);
+
+  /* ── kho tab containers ── */
+  const khoContainers = useMemo(() => {
+    return containers.filter((c) => matchesKho(c.cargoTypeName, tab));
+  }, [containers, tab]);
+
+  const khoCount     = getCargoCountForTab(inventory?.byCargoType, tab);
+  const khoTabLabel  = REPORT_TABS.find((t) => t.id === tab)?.label || '';
 
   return (
     <>
@@ -101,27 +242,63 @@ export default function BaoCaoThongKe() {
 
       <div className="tabs">
         {REPORT_TABS.map((item) => (
-          <button key={item.id} className={`tab-btn${tab === item.id ? ' active' : ''}`} type="button" onClick={() => setTab(item.id)}>{item.label}</button>
+          <button
+            key={item.id}
+            className={`tab-btn${tab === item.id ? ' active' : ''}`}
+            type="button"
+            onClick={() => setTab(item.id)}
+          >
+            {item.label}
+          </button>
         ))}
       </div>
 
-      {tab === 'tongquan' ? (
+      {/* ── TỔNG QUAN ── */}
+      {tab === 'tongquan' && (
         <>
+          <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 12, flexWrap: 'wrap' }}>
+            <label className="form-label" style={{ margin: 0 }}>Từ:</label>
+            <input className="form-input" type="date" style={{ width: 160 }} value={from} onChange={(e) => setFrom(e.target.value)} />
+            <label className="form-label" style={{ margin: 0 }}>Đến:</label>
+            <input className="form-input" type="date" style={{ width: 160 }} value={to} onChange={(e) => setTo(e.target.value)} />
+            <button className="btn btn-secondary btn-sm" onClick={() => fetchTongQuan(from, to)} disabled={tqLoading}>
+              {tqLoading ? 'Đang tải...' : 'Cập nhật'}
+            </button>
+          </div>
+
+          {tqError && (
+            <div className="card" style={{ borderColor: 'var(--danger)', marginBottom: 12 }}>
+              <div style={{ color: 'var(--danger)' }}>{tqError}</div>
+            </div>
+          )}
+
           <div className="stats-grid" style={{ gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', marginBottom: 16 }}>
             <div className="card">
-              <div style={{ fontSize: 12, color: 'var(--text2)' }}>Doanh thu (sau khấu trừ)</div>
-              <div style={{ marginTop: 8, fontSize: 24, fontWeight: 700, color: 'var(--success)' }}>₫282M</div>
-              <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 6 }}>Trừ phạt ₫18M | Xuất chậm ₫5M</div>
+              <div style={{ fontSize: 12, color: 'var(--text2)' }}>Tổng thu (hóa đơn lưu kho)</div>
+              <div style={{ marginTop: 8, fontSize: 24, fontWeight: 700, color: 'var(--success)' }}>
+                {tqLoading ? '...' : revenue ? `${Number(revenue.totalAmount ?? 0).toLocaleString('vi-VN')}` : '—'}
+              </div>
+              <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 6 }}>
+                {revenue ? `${revenue.totalInvoices} hóa đơn | phạt quá hạn: ${Number(revenue.overdueAmount ?? 0).toLocaleString('vi-VN')}` : ''}
+              </div>
             </div>
             <div className="card">
-              <div style={{ fontSize: 12, color: 'var(--text2)' }}>Chi phí ước tính</div>
-              <div style={{ marginTop: 8, fontSize: 24, fontWeight: 700, color: 'var(--danger)' }}>₫145M</div>
-              <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 6 }}>Vận hành + bảo trì + nhân sự</div>
+              <div style={{ fontSize: 12, color: 'var(--text2)' }}>Hóa đơn quá hạn</div>
+              <div style={{ marginTop: 8, fontSize: 24, fontWeight: 700, color: 'var(--danger)' }}>
+                {tqLoading ? '...' : revenue ? revenue.overdueInvoices : '—'}
+              </div>
+              <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 6 }}>
+                {revenue ? `Tiền phạt: ${Number(revenue.overdueAmount ?? 0).toLocaleString('vi-VN')}` : ''}
+              </div>
             </div>
             <div className="card">
-              <div style={{ fontSize: 12, color: 'var(--text2)' }}>Lợi nhuận ròng</div>
-              <div style={{ marginTop: 8, fontSize: 24, fontWeight: 700, color: 'var(--primary)' }}>₫137M</div>
-              <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 6 }}>Biên lợi nhuận 48.6%</div>
+              <div style={{ fontSize: 12, color: 'var(--text2)' }}>Tổng container (kho)</div>
+              <div style={{ marginTop: 8, fontSize: 24, fontWeight: 700, color: 'var(--primary)' }}>
+                {invLoading ? '...' : inventory ? inventory.totalContainers : '—'}
+              </div>
+              <div style={{ fontSize: 12, color: 'var(--text3)', marginTop: 6 }}>
+                {inventory ? `${Object.keys(inventory.byCargoType ?? {}).length} loại hàng` : ''}
+              </div>
             </div>
           </div>
 
@@ -130,21 +307,29 @@ export default function BaoCaoThongKe() {
               <div className="card-header">
                 <div>
                   <div className="card-title">Hoạt động Gate theo tháng</div>
-                  <div className="card-subtitle">Gate vào / Gate ra / Gate hỏng</div>
+                  <div className="card-subtitle">Gate vào / Gate ra</div>
                 </div>
               </div>
-              <div style={{ width: '100%', height: 220 }}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={orderData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="name" tickLine={false} axisLine={false} />
-                    <YAxis tickLine={false} axisLine={false} />
-                    <Tooltip />
-                    <Bar dataKey="value" fill="#3b82f6" radius={[6, 6, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
+              {tqLoading ? (
+                <div style={{ height: 220, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text2)', fontSize: 13 }}>Đang tải...</div>
+              ) : monthlyGate.length === 0 ? (
+                <div style={{ height: 220, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text2)', fontSize: 13 }}>Không có dữ liệu trong khoảng thời gian này.</div>
+              ) : (
+                <div style={{ width: '100%', height: 220 }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={monthlyGate} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="name" tickLine={false} axisLine={false} />
+                      <YAxis tickLine={false} axisLine={false} />
+                      <Tooltip />
+                      <Bar dataKey="gateIn"  name="Gate-In"  fill="#10b981" radius={[4, 4, 0, 0]} />
+                      <Bar dataKey="gateOut" name="Gate-Out" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              )}
             </div>
+
             <div className="card">
               <div className="card-header">
                 <div>
@@ -152,108 +337,224 @@ export default function BaoCaoThongKe() {
                   <div className="card-subtitle">Số lượng container theo loại</div>
                 </div>
               </div>
-              <div className="two-col" style={{ gap: 14, alignItems: 'center' }}>
-                <div style={{ width: '100%', height: 200 }}>
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie data={pieData} dataKey="value" innerRadius={60} outerRadius={90} paddingAngle={4}>
-                        {pieData.map((entry) => (
-                          <Cell key={entry.name} fill={entry.color} />
-                        ))}
-                      </Pie>
-                    </PieChart>
-                  </ResponsiveContainer>
+              {invLoading ? (
+                <div style={{ height: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text2)', fontSize: 13 }}>Đang tải...</div>
+              ) : pieSeries.length === 0 ? (
+                <div style={{ height: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text2)', fontSize: 13 }}>Chưa có dữ liệu.</div>
+              ) : (
+                <div className="two-col" style={{ gap: 14, alignItems: 'center' }}>
+                  <div style={{ width: '100%', height: 200 }}>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie data={pieSeries} dataKey="value" innerRadius={60} outerRadius={90} paddingAngle={4}>
+                          {pieSeries.map((entry) => (
+                            <Cell key={entry.name} fill={entry.color} />
+                          ))}
+                        </Pie>
+                        <Tooltip />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+                  <div style={{ minWidth: 160 }}>
+                    {pieSeries.map((entry) => (
+                      <div key={entry.name} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, fontSize: 13 }}>
+                        <span style={{ width: 10, height: 10, borderRadius: '50%', background: entry.color, flexShrink: 0, display: 'inline-block' }} />
+                        <span>{entry.name}: {entry.value}%</span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-                <div style={{ minWidth: 180 }}>
-                  {pieData.map((entry) => (
-                    <div key={entry.name} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, fontSize: 13 }}>
-                      <span className="legend-dot" style={{ background: entry.color }} />
-                      <span>{entry.name}: {entry.value}%</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
+              )}
             </div>
           </div>
 
           <div className="card">
             <div className="card-header">
               <div>
-                <div className="card-title">Khách hàng hàng đầu</div>
-                <div className="card-subtitle">Top 5 khách hàng doanh thu cao nhất</div>
+                <div className="card-title">Tổng hợp đơn hàng theo trạng thái</div>
+                <div className="card-subtitle">Kỳ từ {from} đến {to}</div>
               </div>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-              <div style={{ height: 220 }}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={pieData.map((item) => ({ name: item.name, value: item.value * 2 }))} layout="vertical" margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis type="number" tickLine={false} axisLine={false} />
-                    <YAxis dataKey="name" type="category" tickLine={false} axisLine={false} />
-                    <Tooltip />
-                    <Bar dataKey="value" fill="#6c47ff" radius={[6, 6, 6, 6]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-              <div>
-                <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 12 }}>Bảng xếp hạng</div>
-                {['Trần Văn B', 'Lê Thị C', 'Phạm Văn D', 'Hoàng Thị E', 'Ngô Văn F'].map((name, idx) => (
-                  <div key={name} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, padding: '10px 0', borderBottom: '1px solid var(--border)' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                      <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'var(--primary-light)', color: 'var(--primary)', display: 'grid', placeItems: 'center', fontSize: 12, fontWeight: 700 }}>{idx + 1}</div>
-                      <div>
-                        <div style={{ fontWeight: 600 }}>{name}</div>
-                        <div style={{ fontSize: 12, color: 'var(--text2)' }}>{45 - idx * 5} đơn hàng</div>
-                      </div>
-                    </div>
-                    <div style={{ fontWeight: 700, color: 'var(--primary)' }}>₫{125 - idx * 15}M</div>
+            {tqLoading ? (
+              <div style={{ padding: '24px', color: 'var(--text2)' }}>Đang tải...</div>
+            ) : orderReport ? (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 16 }}>
+                <div style={{ height: 200 }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={orderStatusData} layout="vertical" margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis type="number" tickLine={false} axisLine={false} />
+                      <YAxis dataKey="name" type="category" tickLine={false} axisLine={false} width={80} />
+                      <Tooltip />
+                      <Bar dataKey="value" fill="#6c47ff" radius={[0, 4, 4, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 12 }}>Chi tiết trạng thái đơn hàng</div>
+                  <div style={{ marginBottom: 8, fontSize: 13 }}>
+                    <span style={{ color: 'var(--text2)' }}>Tổng đơn (hệ thống):</span>{' '}
+                    <strong>{orderReport.totalOrders}</strong>
                   </div>
-                ))}
+                  <div style={{ marginBottom: 12, fontSize: 13 }}>
+                    <span style={{ color: 'var(--text2)' }}>Đơn trong kỳ:</span>{' '}
+                    <strong>{orderReport.ordersInPeriod}</strong>
+                  </div>
+                  {orderStatusData.map(({ name, value }) => (
+                    <div key={name} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid var(--border)', fontSize: 13 }}>
+                      <span>{name}</span>
+                      <strong>{value}</strong>
+                    </div>
+                  ))}
+                </div>
               </div>
-            </div>
+            ) : (
+              <div style={{ padding: '24px', color: 'var(--text2)', fontSize: 13 }}>Chưa có dữ liệu đơn hàng.</div>
+            )}
           </div>
         </>
-      ) : (
-        <>
-          <div className="card" style={{ marginBottom: 16 }}>
-            <div className="card-header" style={{ justifyContent: 'space-between', gap: 12 }}>
-              <div>
-                <div className="card-title">{activeReport?.title}</div>
-                <div className="card-subtitle">{activeReport?.subtitle}</div>
-              </div>
+      )}
+
+      {/* ── HÀNG HỎNG ── */}
+      {tab === 'hanghong' && (
+        <div className="card">
+          <div className="card-header" style={{ justifyContent: 'space-between' }}>
+            <div>
+              <div className="card-title">Tổng hợp hàng hỏng / Cảnh báo</div>
+              <div className="card-subtitle">Danh sách cảnh báo và sự cố đang theo dõi</div>
             </div>
-            <div className="stats-grid" style={{ gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', marginBottom: 16 }}>
-              <div className="stat-card"><div><div className="stat-label">Tổng mục</div><div className="stat-value">{activeReport?.rows.length}</div></div></div>
-              <div className="stat-card"><div><div className="stat-label">Tổng phí</div><div className="stat-value" style={{ fontSize: 18 }}>{(() => {
-                const total = activeReport?.rows.reduce((sum, row) => sum + parseMoney(row.phi), 0) ?? 0;
-                return total >= 1000000 ? `₫${Math.round(total / 1000000)}M` : `₫${(total / 1000).toLocaleString()}K`;
-              })()}</div></div></div>
-              <div className="stat-card"><div><div className="stat-label">Đơn hàng</div><div className="stat-value">{activeReport?.rows.length}</div></div></div>
-              <div className="stat-card"><div><div className="stat-label">Tỷ lệ sự cố</div><div className="stat-value">{Math.min(15 + (activeReport?.rows.length ?? 0), 28)}%</div></div></div>
-            </div>
+            <button className="btn btn-secondary btn-sm" onClick={() => fetchAlerts(0)} disabled={alertLoading}>Làm mới</button>
+          </div>
+
+          <div className="stats-grid" style={{ gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', marginBottom: 16 }}>
+            <div className="stat-card"><div><div className="stat-label">Tổng cảnh báo</div><div className="stat-value">{alertLoading ? '...' : alertTotal}</div></div></div>
+            <div className="stat-card"><div><div className="stat-label">Đang mở (OPEN)</div><div className="stat-value">{alertLoading ? '...' : alerts.filter((a) => a.status === 0).length}</div></div></div>
+            <div className="stat-card"><div><div className="stat-label">Đã xử lý</div><div className="stat-value">{alertLoading ? '...' : alerts.filter((a) => a.status === 1).length}</div></div></div>
+            <div className="stat-card"><div><div className="stat-label">Nghiêm trọng</div><div className="stat-value">{alertLoading ? '...' : alerts.filter((a) => a.levelName === 'CRITICAL').length}</div></div></div>
+          </div>
+
+          {alertError && <div style={{ color: 'var(--danger)', marginBottom: 8 }}>{alertError}</div>}
+
+          {alertLoading ? (
+            <div style={{ padding: '24px', color: 'var(--text2)' }}>Đang tải...</div>
+          ) : (
             <div className="table-wrap">
               <table>
                 <thead>
                   <tr>
-                    <th>Mã đơn</th><th>Loại</th><th>Mô tả</th><th>Ngày</th><th>Chi phí</th><th>Trạng thái</th>
+                    <th>ID</th><th>Khu vực</th><th>Mô tả</th><th>Mức độ</th><th>Trạng thái</th><th>Ngày tạo</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {activeReport?.rows.map((row) => (
-                    <tr key={row.don}>
-                      <td>{row.don}</td>
-                      <td><span className={`badge ${row.badge}`}>{row.loai}</span></td>
-                      <td>{row.moTa}</td>
-                      <td>{row.ngay}</td>
-                      <td>{row.phi}</td>
-                      <td><span className={`badge ${row.badge}`}>{row.trangThai}</span></td>
-                    </tr>
-                  ))}
+                  {alerts.length === 0 ? (
+                    <tr><td colSpan={6} style={{ color: 'var(--text2)' }}>Không có cảnh báo nào.</td></tr>
+                  ) : (
+                    alerts.map((a) => (
+                      <tr key={a.alertId}>
+                        <td><code>{a.alertId}</code></td>
+                        <td>{a.zoneName || (a.zoneId ? `Zone #${a.zoneId}` : '—')}</td>
+                        <td>{a.description || '—'}</td>
+                        <td>
+                          <span className={`badge ${a.levelName === 'CRITICAL' ? 'badge-danger' : 'badge-warning'}`}>
+                            {a.levelName || '—'}
+                          </span>
+                        </td>
+                        <td>
+                          <span className={`badge ${a.status === 0 ? 'badge-danger' : 'badge-success'}`}>
+                            {a.status === 0 ? 'OPEN' : 'ACKNOWLEDGED'}
+                          </span>
+                        </td>
+                        <td>{a.createdAt ? new Date(a.createdAt).toLocaleString('vi-VN') : '—'}</td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>
+          )}
+
+          {alertTotalPages > 1 && (
+            <div style={{ display: 'flex', gap: 8, padding: '12px 0', justifyContent: 'flex-end' }}>
+              <button className="btn btn-secondary btn-sm" disabled={alertPage === 0} onClick={() => fetchAlerts(alertPage - 1)}>←</button>
+              <span style={{ lineHeight: '28px', fontSize: 13 }}>{alertPage + 1} / {alertTotalPages}</span>
+              <button className="btn btn-secondary btn-sm" disabled={alertPage >= alertTotalPages - 1} onClick={() => fetchAlerts(alertPage + 1)}>→</button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── KHO SUB-TABS ── */}
+      {tab.startsWith('kho-') && (
+        <div className="card">
+          <div className="card-header" style={{ justifyContent: 'space-between' }}>
+            <div>
+              <div className="card-title">{khoTabLabel}</div>
+              <div className="card-subtitle">Danh sách container và thống kê</div>
+            </div>
+            <button className="btn btn-secondary btn-sm" onClick={fetchContainers} disabled={khoLoading}>Làm mới</button>
           </div>
-        </>
+
+          <div className="stats-grid" style={{ gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', marginBottom: 16 }}>
+            <div className="stat-card">
+              <div>
+                <div className="stat-label">Tổng container (kho này)</div>
+                <div className="stat-value">{invLoading ? '...' : khoCount}</div>
+              </div>
+            </div>
+            <div className="stat-card">
+              <div>
+                <div className="stat-label">Hiển thị trong bảng</div>
+                <div className="stat-value">{khoLoading ? '...' : khoContainers.length}</div>
+              </div>
+            </div>
+            <div className="stat-card">
+              <div>
+                <div className="stat-label">Tổng tất cả container</div>
+                <div className="stat-value">{invLoading ? '...' : (inventory?.totalContainers ?? '—')}</div>
+              </div>
+            </div>
+          </div>
+
+          {khoError && <div style={{ color: 'var(--danger)', marginBottom: 8 }}>{khoError}</div>}
+
+          {khoLoading ? (
+            <div style={{ padding: '24px', color: 'var(--text2)' }}>Đang tải...</div>
+          ) : (
+            <div className="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Container ID</th><th>Loại container</th><th>Loại hàng</th>
+                    <th>Trạng thái</th><th>Trọng lượng (kg)</th><th>Ngày nhập</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {khoContainers.length === 0 ? (
+                    <tr><td colSpan={6} style={{ color: 'var(--text2)' }}>Không có container nào trong kho này.</td></tr>
+                  ) : (
+                    khoContainers.map((c) => (
+                      <tr key={c.containerId}>
+                        <td><code>{c.containerId}</code></td>
+                        <td>{c.containerTypeName || '—'}</td>
+                        <td>{c.cargoTypeName || '—'}</td>
+                        <td>
+                          <span className={`badge ${
+                            c.statusName?.includes('YARD') ? 'badge-success' :
+                            c.statusName?.includes('GATE') ? 'badge-info' : 'badge-gray'
+                          }`}>
+                            {c.statusName || '—'}
+                          </span>
+                        </td>
+                        <td>{c.grossWeight != null ? Number(c.grossWeight).toLocaleString() : '—'}</td>
+                        <td>{c.createdAt ? new Date(c.createdAt).toLocaleDateString('vi-VN') : '—'}</td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
       )}
     </>
   );

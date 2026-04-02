@@ -14,6 +14,7 @@ type AdminNavItem = {
     | 'hangtau'
     | 'lichTrinh'
     | 'cuocphi'
+    | 'quanlykho'
     | 'quantritaikhoan'
     | 'taikhoan'
     | 'xuatbaocao';
@@ -87,6 +88,12 @@ const IconUsers = (
     <circle cx="12" cy="7" r="4" />
   </svg>
 );
+const IconWarehouse = (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
+    <polyline points="9 22 9 12 15 12 15 22" />
+  </svg>
+);
 
 function getTheme(): 'light' | 'dark' {
   try {
@@ -119,6 +126,7 @@ export default function AdminWarehouseManagementLayout(
       { id: 'hangtau', label: 'Hãng Tàu', to: '/warehouse/admin/section/quan-ly-hang-tau', icon: IconShip },
       { id: 'lichTrinh', label: 'Lịch Trình', to: '/warehouse/admin/section/quan-ly-lich', icon: IconCalendar },
       { id: 'cuocphi', label: 'Cước Phí', to: '/warehouse/admin/section/quan-ly-cuoc-phi-bieu-cuoc', icon: IconDollar },
+      { id: 'quanlykho', label: 'Quản lý kho', to: '/tong-quan', icon: IconWarehouse },
       { id: 'quantritaikhoan', label: 'Quản trị hệ thống', to: '/warehouse/admin/section/quan-tri-he-thong', icon: IconUsers },
       { id: 'taikhoan', label: 'Tài khoản Admin', to: '/warehouse/admin/section/quan-ly-tai-khoan', icon: IconUser },
     ],
@@ -185,16 +193,32 @@ export default function AdminWarehouseManagementLayout(
         ))}
 
         <div className="sidebar-section">Quản lý</div>
-        {navItems.slice(2, 8).map((item) => (
-          <Link key={item.id} to={item.to} className={`nav-item ${activeTo === item.to ? 'active' : ''}`}>
-            {item.icon}
-            {item.label}
-            {item.badge ? <span className="nav-badge">{item.badge}</span> : null}
-          </Link>
-        ))}
+        {navItems.slice(2, 9).map((item) =>
+          item.id === 'quanlykho' ? (
+            <button
+              key={item.id}
+              type="button"
+              className="nav-item"
+              onClick={() => {
+                const token = localStorage.getItem('ht_token');
+                const url = `http://localhost:5173/tong-quan${token ? `?token=${encodeURIComponent(token)}` : ''}`;
+                window.open(url, '_blank');
+              }}
+            >
+              {item.icon}
+              {item.label}
+            </button>
+          ) : (
+            <Link key={item.id} to={item.to} className={`nav-item ${activeTo === item.to ? 'active' : ''}`}>
+              {item.icon}
+              {item.label}
+              {item.badge ? <span className="nav-badge">{item.badge}</span> : null}
+            </Link>
+          )
+        )}
 
         <div className="sidebar-section">Hệ thống</div>
-        {navItems.slice(8).map((item) => (
+        {navItems.slice(9).map((item) => (
           <Link key={item.id} to={item.to} className={`nav-item ${activeTo === item.to ? 'active' : ''}`}>
             {item.icon}
             {item.label}

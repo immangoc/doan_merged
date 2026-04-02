@@ -1,59 +1,24 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Bell, CheckCircle2, Clock, X } from 'lucide-react';
-import { useWarehouseAuth } from '../../contexts/WarehouseAuthContext';
-import { projectId, publicAnonKey } from '../../utils/supabase/info';
+import { useWarehouseAuth, API_BASE } from '../../contexts/WarehouseAuthContext';
 import { Button } from '../ui/button';
-import { Input } from '../ui/input';
 import { Badge } from '../ui/badge';
 
 type Notification = {
-  id: string;
+  id: number;
   title: string;
   message: string;
   type: 'info' | 'warning' | 'error';
   read: boolean;
-  archived: boolean;
-  created_at: string;
+  createdAt: string;
 };
 
-const DEMO_NOTIFICATIONS: Notification[] = [
-  {
-    id: 'demo-1',
-    title: 'Kho lạnh đã đạt 90% công suất',
-    message: 'Cần xử lý ngay để tránh suy giảm chất lượng hàng đông lạnh.',
-    type: 'warning',
-    read: false,
-    archived: false,
-    created_at: new Date(Date.now() - 10 * 60000).toISOString(),
-  },
-  {
-    id: 'demo-2',
-    title: 'Đơn hàng ORD-10 mới từ Hàng Hải Bình Minh',
-    message: 'Đơn hàng mới đã được tạo và chờ xác nhận.',
-    type: 'info',
-    read: false,
-    archived: false,
-    created_at: new Date(Date.now() - 15 * 60000).toISOString(),
-  },
-  {
-    id: 'demo-3',
-    title: 'Lệnh nhập kho container CT-001 thành công',
-    message: 'Container CT-001 đã vào kho và đang chờ kiểm tra.',
-    type: 'info',
-    read: true,
-    archived: false,
-    created_at: new Date(Date.now() - 60 * 60000).toISOString(),
-  },
-  {
-    id: 'demo-4',
-    title: 'Đơn hàng ORD-9 từ Cảng Sài Gòn đã được duyệt',
-    message: 'Đơn hàng ORD-9 đã được chấp nhận và sắp xếp lịch tàu.',
-    type: 'info',
-    read: true,
-    archived: false,
-    created_at: new Date(Date.now() - 120 * 60000).toISOString(),
-  },
-];
+function inferType(title: string): Notification['type'] {
+  const t = title.toLowerCase();
+  if (t.includes('từ chối') || t.includes('lỗi') || t.includes('thất bại')) return 'error';
+  if (t.includes('cảnh báo') || t.includes('quá hạn') || t.includes('đầy')) return 'warning';
+  return 'info';
+}
 
 function formatTime(iso: string) {
   const d = new Date(iso);
@@ -73,91 +38,110 @@ function typeBadgeClass(type: Notification['type']) {
 }
 
 export default function NotificationsBell() {
-  const { accessToken, user } = useWarehouseAuth();
+  const { accessToken } = useWarehouseAuth();
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
   const [onlyUnread, setOnlyUnread] = useState(true);
-  const [keyword, setKeyword] = useState('');
   const [selected, setSelected] = useState<Notification | null>(null);
 
   const buttonRef = useRef<HTMLButtonElement | null>(null);
   const panelRef = useRef<HTMLDivElement | null>(null);
 
-  const apiUrl = `https://${projectId}.supabase.co/functions/v1/make-server-ce1eb60c`;
-  const headers = useMemo(
-    () => ({
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${accessToken || publicAnonKey}`,
-    }),
-    [accessToken],
-  );
+  const headers = useMemo(() => ({
+    'Content-Type': 'application/json',
+    ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+  }), [accessToken]);
 
-  const fetchNotifications = async () => {
+  const fetchUnreadCount = useCallback(async () => {
+    if (!accessToken) return;
+    try {
+      const res = await fetch(`${API_BASE}/notifications/unread-count`, { headers });
+      const d = await res.json();
+      if (res.ok) setUnreadCount(d.data ?? 0);
+    } catch {
+      // ignore
+    }
+  }, [headers, accessToken]);
+
+  const fetchNotifications = useCallback(async () => {
+    if (!accessToken) return;
     setLoading(true);
     setError('');
     try {
-      const res = await fetch(`${apiUrl}/notifications?limit=50`, { headers });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Lỗi lấy thông báo');
-      setNotifications(data.notifications || []);
+      const res = await fetch(`${API_BASE}/notifications/my?page=0&size=30&sort=createdAt,desc`, { headers });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.message || 'Lỗi lấy thông báo');
+      const items = (d.data?.content || d.data || []) as { notificationId: number; title: string; description: string; isRead: boolean; createdAt: string }[];
+      setNotifications(items.map((n) => ({
+        id: n.notificationId,
+        title: n.title,
+        message: n.description,
+        type: inferType(n.title),
+        read: n.isRead,
+        createdAt: n.createdAt,
+      })));
     } catch (e: any) {
-      // Non-admin roles might get 403; keep header silent for demo.
       setError(e.message || 'Lỗi không xác định');
     } finally {
       setLoading(false);
     }
-  };
+  }, [headers, accessToken]);
+
+  // Poll unread count every 10 seconds
+  useEffect(() => {
+    if (!accessToken) return;
+    fetchUnreadCount();
+    const id = setInterval(fetchUnreadCount, 10000);
+    return () => clearInterval(id);
+  }, [fetchUnreadCount, accessToken]);
+
+  // Listen for approve/reject events to refresh immediately
+  useEffect(() => {
+    const handler = () => {
+      fetchUnreadCount();
+      if (open) fetchNotifications();
+    };
+    window.addEventListener('wms:notification-refresh', handler);
+    return () => window.removeEventListener('wms:notification-refresh', handler);
+  }, [open, fetchUnreadCount, fetchNotifications]);
 
   useEffect(() => {
     if (!open) return;
     fetchNotifications();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
-  const sourceNotifications = notifications.length > 0 ? notifications : DEMO_NOTIFICATIONS;
-  const unreadCount = useMemo(
-    () => sourceNotifications.filter((n) => !n.read && !n.archived).length,
-    [sourceNotifications],
-  );
-
   const filtered = useMemo(() => {
-    const k = keyword.trim().toLowerCase();
-    const base = sourceNotifications.filter((n) => !n.archived);
-    const unreadFiltered = onlyUnread ? base.filter((n) => !n.read) : base;
-    if (!k) return unreadFiltered;
-    return unreadFiltered.filter((n) => `${n.title} ${n.message} ${n.type}`.toLowerCase().includes(k));
-  }, [sourceNotifications, onlyUnread, keyword]);
-
-  const markAllRead = () => {
-    const base = notifications.length > 0 ? notifications : DEMO_NOTIFICATIONS;
-    setNotifications(base.map((n) => ({ ...n, read: true })));
-  };
+    if (onlyUnread) return notifications.filter((n) => !n.read);
+    return notifications;
+  }, [notifications, onlyUnread]);
 
   const markRead = async (n: Notification) => {
     if (n.read) return;
-    if (notifications.length === 0) {
-      setNotifications(DEMO_NOTIFICATIONS.map((x) => (x.id === n.id ? { ...x, read: true } : x)));
-      return;
+    try {
+      await fetch(`${API_BASE}/notifications/${n.id}/read`, { method: 'PUT', headers });
+      setNotifications((prev) => prev.map((x) => (x.id === n.id ? { ...x, read: true } : x)));
+      setUnreadCount((c) => Math.max(0, c - 1));
+    } catch {
+      // ignore
     }
-    const res = await fetch(`${apiUrl}/notifications/${n.id}`, {
-      method: 'PATCH',
-      headers,
-      body: JSON.stringify({ read: true }),
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Lỗi cập nhật trạng thái');
-    setNotifications((prev) => prev.map((x) => (x.id === n.id ? { ...x, read: true } : x)));
+  };
+
+  const markAllRead = async () => {
+    try {
+      await fetch(`${API_BASE}/notifications/read-all`, { method: 'PUT', headers });
+      setNotifications((prev) => prev.map((x) => ({ ...x, read: true })));
+      setUnreadCount(0);
+    } catch {
+      // ignore
+    }
   };
 
   const onSelect = async (n: Notification) => {
     setSelected(n);
-    try {
-      await markRead(n);
-    } catch {
-      // ignore for demo
-    }
+    await markRead(n);
   };
 
   useEffect(() => {
@@ -173,8 +157,7 @@ export default function NotificationsBell() {
     return () => document.removeEventListener('mousedown', onDocDown);
   }, [open]);
 
-  // Chỉ admin có trung tâm thông báo demo
-  if (!user || user.role !== 'admin') {
+  if (!accessToken) {
     return (
       <button
         className="relative p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
@@ -225,14 +208,6 @@ export default function NotificationsBell() {
                 </Button>
               </div>
             </div>
-
-            <div className="mt-3">
-              <Input
-                placeholder="Lọc theo title/message..."
-                value={keyword}
-                onChange={(e) => setKeyword(e.target.value)}
-              />
-            </div>
           </div>
 
           <div className="max-h-[420px] overflow-y-auto">
@@ -272,7 +247,7 @@ export default function NotificationsBell() {
                     <div className="text-xs text-gray-600 dark:text-gray-300 mt-1 line-clamp-2">{n.message}</div>
                     <div className="text-[11px] text-gray-500 mt-2 flex items-center gap-2">
                       <Clock size={14} />
-                      {formatTime(n.created_at)}
+                      {formatTime(n.createdAt)}
                     </div>
                   </div>
                   {n.read ? <CheckCircle2 size={16} className="text-green-600 mt-1" /> : null}
@@ -298,4 +273,3 @@ export default function NotificationsBell() {
     </div>
   );
 }
-

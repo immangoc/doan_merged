@@ -1,157 +1,171 @@
-import { Area, AreaChart, Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { useEffect, useMemo, useState } from 'react';
+import { useWarehouseAuth, API_BASE } from '../../../contexts/WarehouseAuthContext';
 
-const statCards = [
-  { title: 'Tổng đơn hàng', value: '10', subtitle: '4 đơn chờ xử lý', color: 'si-blue' },
-  { title: 'Container trong kho', value: '4', subtitle: '10 tổng cộng', color: 'si-green' },
-  { title: 'Doanh thu năm nay', value: '₫3K', subtitle: '2 hóa đơn', color: 'si-purple' },
-  { title: 'Cảnh báo mở', value: '7', subtitle: 'Cần xử lý', color: 'si-red' },
-];
-
-const revenueData = [
-  { name: 'T1', value: 48 }, { name: 'T2', value: 52 }, { name: 'T3', value: 45 }, { name: 'T4', value: 61 },
-  { name: 'T5', value: 55 }, { name: 'T6', value: 70 }, { name: 'T7', value: 73 }, { name: 'T8', value: 78 },
-  { name: 'T9', value: 82 }, { name: 'T10', value: 85 }, { name: 'T11', value: 95 }, { name: 'T12', value: 100 },
-];
-
-const ordersData = [
-  { name: 'T1', value: 320 }, { name: 'T2', value: 380 }, { name: 'T3', value: 340 }, { name: 'T4', value: 430 },
-  { name: 'T5', value: 400 }, { name: 'T6', value: 460 }, { name: 'T7', value: 450 }, { name: 'T8', value: 520 },
-  { name: 'T9', value: 540 }, { name: 'T10', value: 570 }, { name: 'T11', value: 610 }, { name: 'T12', value: 650 },
-];
-
-const topContainers = [
-  { loai: '20ft Khô', soLuong: 5, doanhThu: '₫85M', badge: 'badge-info' },
-  { loai: '40ft Lạnh', soLuong: 3, doanhThu: '₫120M', badge: 'badge-success' },
-  { loai: '20ft Nguy Hiểm', soLuong: 1, doanhThu: '₫45M', badge: 'badge-warning' },
-  { loai: '40ft Dễ Vỡ', soLuong: 1, doanhThu: '₫32M', badge: 'badge-gray' },
-];
-
-const recentOrders = [
-  { ma: 'ORD-10', khach: 'Hàng Hải Bình Minh', trangThai: 'Chờ duyệt', badge: 'badge-warning' },
-  { ma: 'ORD-9', khach: 'Cảng Sài Gòn', trangThai: 'Đã duyệt', badge: 'badge-info' },
-  { ma: 'ORD-8', khach: 'Thái Bình Dương', trangThai: 'Chờ duyệt', badge: 'badge-warning' },
-  { ma: 'ORD-7', khach: 'Đại Dương Xanh', trangThai: 'Đã duyệt', badge: 'badge-info' },
-  { ma: 'ORD-6', khach: 'Thương Mại SG', trangThai: 'Từ chối', badge: 'badge-danger' },
-];
+type ContainerStatusCount = { statusName: string; count: number };
+type ZoneOccupancy = {
+  zoneId: number; zoneName: string; yardName: string;
+  capacitySlots: number; occupiedSlots: number; occupancyRate: number;
+};
+type AdminDashData = {
+  gateInToday: number; gateOutToday: number;
+  containersInYard: number; totalContainers: number; overdueContainers: number;
+  pendingOrders: number; totalOrders: number;
+  openAlerts: number; criticalAlerts: number;
+  containersByStatus: ContainerStatusCount[];
+  zoneOccupancy: ZoneOccupancy[];
+};
 
 export default function Dashboard() {
+  const { accessToken } = useWarehouseAuth();
+  const headers = useMemo(() => ({
+    'Content-Type': 'application/json',
+    ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+  }), [accessToken]);
+
+  const [dash, setDash] = useState<AdminDashData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  const fetchData = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const res = await fetch(`${API_BASE}/admin/dashboard`, { headers });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'Lỗi tải dashboard');
+      setDash(data.data);
+    } catch (e: any) {
+      setError(e.message || 'Lỗi không xác định');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { fetchData(); }, []);
+
+  const statCards = dash ? [
+    { title: 'Tổng đơn hàng', value: String(dash.totalOrders), subtitle: `${dash.pendingOrders} đơn chờ xử lý`, color: 'si-blue' },
+    { title: 'Container trong kho', value: String(dash.containersInYard), subtitle: `${dash.totalContainers} tổng cộng`, color: 'si-green' },
+    { title: 'Container quá hạn', value: String(dash.overdueContainers), subtitle: 'Cần xử lý ngay', color: 'si-purple' },
+    { title: 'Cảnh báo mở', value: String(dash.openAlerts), subtitle: `${dash.criticalAlerts} nghiêm trọng`, color: dash.criticalAlerts > 0 ? 'si-red' : '' },
+  ] : [];
+
   return (
     <>
       <div className="page-title">Dashboard</div>
       <div className="page-subtitle">Chào mừng trở lại! Đây là tổng quan hệ thống của bạn.</div>
 
-      <div className="stats-grid">
-        {statCards.map((card) => (
-          <div className="stat-card" key={card.title}>
-            <div>
-              <div className="stat-label">{card.title}</div>
-              <div className="stat-value">{card.value}</div>
-              <div className="stat-sub">{card.subtitle}</div>
-            </div>
-            <div className={`stat-icon ${card.color}`}>
-              <span style={{ fontSize: 20 }}>•</span>
-            </div>
+      {error && (
+        <div className="card" style={{ borderColor: 'var(--danger)', marginBottom: 16 }}>
+          <div style={{ color: 'var(--danger)', fontWeight: 600, marginBottom: 8 }}>Có lỗi xảy ra</div>
+          <div style={{ color: 'var(--text2)' }}>{error}</div>
+          <div style={{ marginTop: 8 }}>
+            <button className="btn btn-secondary btn-sm" onClick={fetchData} disabled={loading}>Thử lại</button>
           </div>
-        ))}
-      </div>
+        </div>
+      )}
 
-      <div className="charts-grid">
-        <div className="card">
-          <div className="card-header">
-            <div>
-              <div className="card-title">Doanh thu theo tháng</div>
-              <div className="card-subtitle">Biểu đồ doanh thu 12 tháng gần nhất</div>
-            </div>
+      {loading ? (
+        <div className="card"><div className="card-subtitle">Đang tải dữ liệu...</div></div>
+      ) : dash && (
+        <>
+          <div className="stats-grid">
+            {statCards.map((card) => (
+              <div className="stat-card" key={card.title}>
+                <div>
+                  <div className="stat-label">{card.title}</div>
+                  <div className="stat-value">{card.value}</div>
+                  <div className="stat-sub">{card.subtitle}</div>
+                </div>
+                <div className={`stat-icon ${card.color}`}>
+                  <span style={{ fontSize: 20 }}>•</span>
+                </div>
+              </div>
+            ))}
           </div>
-          <div style={{ width: '100%', height: 240 }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={revenueData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                <defs>
-                  <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#6c47ff" stopOpacity={0.2} />
-                    <stop offset="95%" stopColor="#6c47ff" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <XAxis dataKey="name" tickLine={false} axisLine={false} />
-                <YAxis tickLine={false} axisLine={false} />
-                <CartesianGrid strokeDasharray="3 3" />
-                <Tooltip />
-                <Area type="monotone" dataKey="value" stroke="#6c47ff" fillOpacity={1} fill="url(#colorRevenue)" />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-        <div className="card">
-          <div className="card-header">
-            <div>
-              <div className="card-title">Đơn hàng theo tháng</div>
-              <div className="card-subtitle">Số lượng đơn hàng 12 tháng gần nhất</div>
-            </div>
-          </div>
-          <div style={{ width: '100%', height: 240 }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={ordersData} margin={{ top: 10, right: 0, left: 0, bottom: 0 }}>
-                <XAxis dataKey="name" tickLine={false} axisLine={false} />
-                <YAxis tickLine={false} axisLine={false} />
-                <CartesianGrid strokeDasharray="3 3" />
-                <Tooltip />
-                <Bar dataKey="value" fill="#6c47ff" radius={[6, 6, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-      </div>
 
-      <div className="two-col">
-        <div className="card">
-          <div className="card-header">
-            <div>
-              <div className="card-title">Loại Container phổ biến</div>
-              <div className="card-subtitle">Container được lưu nhiều nhất & doanh thu</div>
+          <div style={{ display: 'flex', gap: 12, marginBottom: 16 }}>
+            <div className="stat-card" style={{ flex: 1 }}>
+              <div>
+                <div className="stat-label">Gate-In hôm nay</div>
+                <div className="stat-value">{dash.gateInToday}</div>
+              </div>
+            </div>
+            <div className="stat-card" style={{ flex: 1 }}>
+              <div>
+                <div className="stat-label">Gate-Out hôm nay</div>
+                <div className="stat-value">{dash.gateOutToday}</div>
+              </div>
             </div>
           </div>
-          <div className="table-wrap">
-            <table>
-              <thead>
-                <tr><th>Loại</th><th>Số lượng</th><th>Doanh thu</th></tr>
-              </thead>
-              <tbody>
-                {topContainers.map((row) => (
-                  <tr key={row.loai}>
-                    <td><span className={`badge ${row.badge}`}>{row.loai}</span></td>
-                    <td>{row.soLuong}</td>
-                    <td>{row.doanhThu}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-        <div className="card">
-          <div className="card-header">
-            <div>
-              <div className="card-title">Đơn hàng gần đây</div>
-              <div className="card-subtitle">5 đơn hàng mới nhất</div>
+
+          <div className="two-col">
+            <div className="card">
+              <div className="card-header">
+                <div>
+                  <div className="card-title">Phân bố trạng thái container</div>
+                  <div className="card-subtitle">Số container theo từng trạng thái</div>
+                </div>
+              </div>
+              <div className="table-wrap">
+                <table>
+                  <thead>
+                    <tr><th>Trạng thái</th><th>Số lượng</th></tr>
+                  </thead>
+                  <tbody>
+                    {dash.containersByStatus.length === 0 ? (
+                      <tr><td colSpan={2} style={{ color: 'var(--text2)' }}>Chưa có dữ liệu</td></tr>
+                    ) : (
+                      dash.containersByStatus.map((s) => (
+                        <tr key={s.statusName}>
+                          <td>{s.statusName}</td>
+                          <td><strong>{s.count}</strong></td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div className="card">
+              <div className="card-header">
+                <div>
+                  <div className="card-title">Công suất khu vực</div>
+                  <div className="card-subtitle">Tình trạng sử dụng yard</div>
+                </div>
+              </div>
+              <div className="table-wrap">
+                <table>
+                  <thead>
+                    <tr><th>Khu vực</th><th>Đã dùng</th><th>%</th></tr>
+                  </thead>
+                  <tbody>
+                    {dash.zoneOccupancy.length === 0 ? (
+                      <tr><td colSpan={3} style={{ color: 'var(--text2)' }}>Chưa có dữ liệu</td></tr>
+                    ) : (
+                      dash.zoneOccupancy.slice(0, 8).map((z) => (
+                        <tr key={z.zoneId}>
+                          <td>{z.yardName} — {z.zoneName}</td>
+                          <td>{z.occupiedSlots} / {z.capacitySlots}</td>
+                          <td>
+                            <span className={`badge ${
+                              z.occupancyRate > 0.9 ? 'badge-danger' :
+                              z.occupancyRate > 0.7 ? 'badge-warning' : 'badge-info'
+                            }`}>
+                              {Math.round(z.occupancyRate * 100)}%
+                            </span>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
-          <div className="table-wrap">
-            <table>
-              <thead>
-                <tr><th>Mã đơn</th><th>Khách hàng</th><th>Trạng thái</th></tr>
-              </thead>
-              <tbody>
-                {recentOrders.map((order) => (
-                  <tr key={order.ma}>
-                    <td>{order.ma}</td>
-                    <td>{order.khach}</td>
-                    <td><span className={`badge ${order.badge}`}>{order.trangThai}</span></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
+        </>
+      )}
     </>
   );
 }

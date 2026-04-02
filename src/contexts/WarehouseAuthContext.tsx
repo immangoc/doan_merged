@@ -1,5 +1,7 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { projectId, publicAnonKey } from '../utils/supabase/info';
+
+// ─── Backend base URL ─────────────────────────────────────────────────────────
+export const API_BASE = 'http://localhost:8080/api/v1';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 export interface AuthUser {
@@ -30,18 +32,22 @@ interface SignupData {
 }
 
 // ─── API helper ───────────────────────────────────────────────────────────────
-const API = `https://${projectId}.supabase.co/functions/v1/make-server-ce1eb60c`;
-
-async function apiFetch(path: string, options: RequestInit = {}, token?: string | null) {
+export async function apiFetch(path: string, options: RequestInit = {}, token?: string | null) {
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
-    // anon key để Supabase cho phép gọi edge function
-    'Authorization': `Bearer ${token || publicAnonKey}`,
+    ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
     ...(options.headers as Record<string, string> || {}),
   };
-  const res = await fetch(`${API}${path}`, { ...options, headers });
-  const data = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
-  if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+  const res = await fetch(`${API_BASE}${path}`, { ...options, headers });
+  if (res.status === 401) {
+    // Token expired or invalidated — clear session and redirect to login
+    localStorage.removeItem('ht_token');
+    localStorage.removeItem('ht_user');
+    window.location.href = '/warehouse/login';
+    throw new Error('Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.');
+  }
+  const data = await res.json().catch(() => ({ message: `HTTP ${res.status}` }));
+  if (!res.ok) throw new Error(data.message || `HTTP ${res.status}`);
   return data;
 }
 
@@ -76,14 +82,25 @@ export function WarehouseAuthProvider({ children }: { children: ReactNode }) {
     setLoading(false);
   }, []);
 
-  // ── Đăng nhập — gọi backend, so sánh với database ────────────────────────
+  // ── Đăng nhập — gọi Spring Boot backend ─────────────────────────────────
   const login = async (email: string, password: string): Promise<AuthUser> => {
-    const data = await apiFetch('/auth/login', {
+    // Backend LoginRequest expects {email, password}
+    const res = await apiFetch('/auth/login', {
       method: 'POST',
       body: JSON.stringify({ email, password }),
     });
 
-    const { token: newToken, user: userData } = data;
+    // Spring Boot returns ApiResponse<LoginResponse>:
+    // { status, message, data: { token, expiresIn, userId, username, email, role } }
+    const loginData = res.data;
+    const newToken = loginData.token;
+
+    const userData: AuthUser = {
+      id:    String(loginData.userId),
+      email: loginData.email,
+      name:  loginData.username,
+      role:  (loginData.role as string).toLowerCase() as AuthUser['role'],
+    };
 
     setToken(newToken);
     setUser(userData);
@@ -95,14 +112,25 @@ export function WarehouseAuthProvider({ children }: { children: ReactNode }) {
 
   // ── Đăng ký ───────────────────────────────────────────────────────────────
   const signup = async (signupData: SignupData): Promise<void> => {
+    // Backend RegisterRequest accepts { email, password, name (→fullName), phone }
+    // username is auto-generated from email on the backend
     await apiFetch('/auth/register', {
       method: 'POST',
-      body: JSON.stringify(signupData),
+      body: JSON.stringify({
+        email:    signupData.email,
+        password: signupData.password,
+        name:     signupData.name,
+        phone:    signupData.phone,
+      }),
     });
   };
 
   // ── Đăng xuất ────────────────────────────────────────────────────────────
   const logout = () => {
+    // Notify backend to blacklist the token (best-effort, no await)
+    if (token) {
+      apiFetch('/auth/logout', { method: 'POST' }, token).catch(() => {});
+    }
     setUser(null);
     setToken(null);
     localStorage.removeItem(TOKEN_KEY);
@@ -127,6 +155,6 @@ export function useAuthHeaders() {
   const { token } = useWarehouseAuth();
   return {
     'Content-Type': 'application/json',
-    'Authorization': `Bearer ${token || publicAnonKey}`,
+    ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
   };
 }
