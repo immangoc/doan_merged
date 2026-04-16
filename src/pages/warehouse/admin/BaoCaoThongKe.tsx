@@ -30,6 +30,7 @@ type AlertItem = {
 type ContainerItem = {
   containerId: string; containerTypeName?: string; statusName?: string;
   cargoTypeName?: string; grossWeight?: number; createdAt?: string;
+  declaredValue?: number;
 };
 
 /* ─── Constants ─────────────────────────────────────────────── */
@@ -108,6 +109,10 @@ export default function BaoCaoThongKe() {
   const [alertLoading, setAlertLoading] = useState(false);
   const [alertError, setAlertError] = useState('');
 
+  // damaged containers (financial stats)
+  const [damagedContainers, setDamagedContainers] = useState<ContainerItem[]>([]);
+  const [damagedLoading, setDamagedLoading] = useState(false);
+
   // kho tabs
   const [containers, setContainers]   = useState<ContainerItem[]>([]);
   const [khoLoading, setKhoLoading]   = useState(false);
@@ -152,6 +157,18 @@ export default function BaoCaoThongKe() {
     }
   };
 
+  /* ── fetch damaged containers (financial stats) ── */
+  const fetchDamagedContainers = async () => {
+    setDamagedLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/admin/containers?statusName=DAMAGED&page=0&size=200`, { headers });
+      const d = await res.json();
+      if (res.ok) setDamagedContainers(d.data?.content || []);
+    } catch { /* ignore */ } finally {
+      setDamagedLoading(false);
+    }
+  };
+
   /* ── fetch alerts (hanghong) ── */
   const fetchAlerts = async (pg = 0) => {
     setAlertLoading(true);
@@ -190,7 +207,10 @@ export default function BaoCaoThongKe() {
   /* ── tab switch ── */
   useEffect(() => {
     if (tab === 'tongquan') fetchTongQuan();
-    else if (tab === 'hanghong') { if (alerts.length === 0) fetchAlerts(0); }
+    else if (tab === 'hanghong') {
+      if (alerts.length === 0) fetchAlerts(0);
+      if (damagedContainers.length === 0) fetchDamagedContainers();
+    }
     else if (tab.startsWith('kho-')) { if (containers.length === 0) fetchContainers(); }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab]);
@@ -432,6 +452,72 @@ export default function BaoCaoThongKe() {
             <div className="stat-card"><div><div className="stat-label">Đã xử lý</div><div className="stat-value">{alertLoading ? '...' : alerts.filter((a) => a.status === 1).length}</div></div></div>
             <div className="stat-card"><div><div className="stat-label">Nghiêm trọng</div><div className="stat-value">{alertLoading ? '...' : alerts.filter((a) => a.levelName === 'CRITICAL').length}</div></div></div>
           </div>
+
+          {/* ── Damaged Container Financial Summary ── */}
+          {(() => {
+            const totalDeclared = damagedContainers.reduce((sum, c) => sum + (c.declaredValue ?? 0), 0);
+            const withValue     = damagedContainers.filter((c) => (c.declaredValue ?? 0) > 0);
+            return (
+              <div style={{ marginBottom: 20 }}>
+                <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 10, color: 'var(--text1)' }}>
+                  Thống kê thiệt hại tài chính — Container hỏng
+                </div>
+                <div className="stats-grid" style={{ gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', marginBottom: 12 }}>
+                  <div className="stat-card">
+                    <div>
+                      <div className="stat-label">Container DAMAGED</div>
+                      <div className="stat-value" style={{ color: '#ef4444' }}>
+                        {damagedLoading ? '...' : damagedContainers.length}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="stat-card">
+                    <div>
+                      <div className="stat-label">Tổng giá trị khai báo (VND)</div>
+                      <div className="stat-value" style={{ color: '#f59e0b', fontSize: 18 }}>
+                        {damagedLoading ? '...' : totalDeclared > 0 ? totalDeclared.toLocaleString('vi-VN') : '—'}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="stat-card">
+                    <div>
+                      <div className="stat-label">Đã khai báo giá trị</div>
+                      <div className="stat-value">
+                        {damagedLoading ? '...' : `${withValue.length} / ${damagedContainers.length}`}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {!damagedLoading && damagedContainers.length > 0 && (
+                  <div className="table-wrap">
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>Container ID</th><th>Loại container</th><th>Loại hàng</th>
+                          <th>Trọng lượng (kg)</th><th>Giá trị khai báo (VND)</th><th>Ngày tạo</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {damagedContainers.map((c) => (
+                          <tr key={c.containerId}>
+                            <td><code>{c.containerId}</code></td>
+                            <td>{c.containerTypeName || '—'}</td>
+                            <td>{c.cargoTypeName || '—'}</td>
+                            <td>{c.grossWeight != null ? Number(c.grossWeight).toLocaleString() : '—'}</td>
+                            <td style={{ fontWeight: (c.declaredValue ?? 0) > 0 ? 600 : undefined, color: (c.declaredValue ?? 0) > 0 ? '#ef4444' : undefined }}>
+                              {(c.declaredValue ?? 0) > 0 ? Number(c.declaredValue).toLocaleString('vi-VN') : '—'}
+                            </td>
+                            <td>{c.createdAt ? new Date(c.createdAt).toLocaleDateString('vi-VN') : '—'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
 
           {alertError && <div style={{ color: 'var(--danger)', marginBottom: 8 }}>{alertError}</div>}
 

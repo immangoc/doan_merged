@@ -7,13 +7,13 @@ interface TopbarProps {
 }
 
 const BREADCRUMB_MAP: Record<string, { parent: string; current: string }> = {
-  '/yard/tong-quan': { parent: '', current: 'Tổng quan 3D kho bãi' },
-  '/yard/3d': { parent: 'Điều độ bãi & Tối ưu hóa', current: 'Sơ đồ 3D trực quan' },
-  '/yard/2d': { parent: 'Điều độ bãi & Tối ưu hóa', current: 'Sơ đồ 2D mặt phẳng' },
-  '/yard/ha-bai': { parent: 'Điều độ bãi & Tối ưu hóa', current: 'Quản lý nhập bãi' },
-  '/yard/xuat-bai': { parent: 'Điều độ bãi & Tối ưu hóa', current: 'Quản lý xuất bãi' },
-  '/yard/kho': { parent: 'Quản lý Kho & Container', current: 'Quản lý Kho' },
-  '/yard/kiem-soat': { parent: 'Kiểm soát & Sự cố', current: 'Kiểm soát & Sự cố' },
+  '/yard3d/tong-quan': { parent: '', current: 'Tổng quan 3D kho bãi' },
+  '/yard3d/3d': { parent: 'Điều độ bãi & Tối ưu hóa', current: 'Sơ đồ 3D trực quan' },
+  '/yard3d/2d': { parent: 'Điều độ bãi & Tối ưu hóa', current: 'Sơ đồ 2D mặt phẳng' },
+  '/yard3d/ha-bai': { parent: 'Điều độ bãi & Tối ưu hóa', current: 'Quản lý nhập bãi' },
+  '/yard3d/xuat-bai': { parent: 'Điều độ bãi & Tối ưu hóa', current: 'Quản lý xuất bãi' },
+  '/yard3d/kho': { parent: 'Quản lý Kho & Container', current: 'Quản lý Kho' },
+  '/yard3d/kiem-soat': { parent: 'Kiểm soát & Sự cố', current: 'Kiểm soát & Sự cố' },
 };
 
 export function Topbar({ onMenuToggle }: TopbarProps) {

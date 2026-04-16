@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { AlertCircle, FileText, Plus, RefreshCw, Search, XCircle } from 'lucide-react';
+import { AlertCircle, FileText, Pencil, Plus, RefreshCw, Search, XCircle } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../../../components/ui/card';
 import { Input } from '../../../components/ui/input';
 import { Button } from '../../../components/ui/button';
@@ -19,6 +19,8 @@ type OrderItem = {
   statusName: string;
   note?: string;
   createdAt?: string;
+  importDate?: string;
+  exportDate?: string;
   containerIds?: string[];
   cancellation?: { cancellationId: number; reason?: string; createdAt?: string } | null;
 };
@@ -35,6 +37,11 @@ type BillItem = {
 const STATUS_LABELS: Record<string, string> = {
   PENDING:          'Chờ duyệt',
   APPROVED:         'Đã duyệt',
+  WAITING_CHECKIN:  'Chờ nhận hàng',
+  LATE_CHECKIN:     'Trễ check-in',
+  IMPORTED:         'Đã nhập kho',
+  STORED:           'Đang lưu kho',
+  EXPORTED:         'Đã xuất kho',
   REJECTED:         'Từ chối',
   CANCEL_REQUESTED: 'Yêu cầu hủy',
   CANCELLED:        'Đã hủy',
@@ -43,6 +50,11 @@ const STATUS_LABELS: Record<string, string> = {
 const STATUS_CLASS: Record<string, string> = {
   PENDING:          'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-200',
   APPROVED:         'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-200',
+  WAITING_CHECKIN:  'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-200',
+  LATE_CHECKIN:     'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-200',
+  IMPORTED:         'bg-teal-100 text-teal-800 dark:bg-teal-900/30 dark:text-teal-200',
+  STORED:           'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-200',
+  EXPORTED:         'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-200',
   REJECTED:         'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-200',
   CANCEL_REQUESTED: 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-200',
   CANCELLED:        'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400',
@@ -67,9 +79,23 @@ export default function Orders() {
   const [keyword, setKeyword] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
 
+  // My containers (for dropdown)
+  const [myContainers, setMyContainers] = useState<{ containerId: string }[]>([]);
+
   // Create order
   const [openCreate, setOpenCreate] = useState(false);
-  const [createForm, setCreateForm] = useState({ customerName: '', phone: '', email: '', address: '', note: '' });
+  const [createForm, setCreateForm] = useState({
+    customerName: '', phone: '', email: '', address: '', note: '',
+    importDate: '', exportDate: '', containerIds: [] as string[],
+  });
+
+  // Edit order (PENDING only)
+  const [openEdit, setOpenEdit] = useState(false);
+  const [editTarget, setEditTarget] = useState<OrderItem | null>(null);
+  const [editForm, setEditForm] = useState({
+    customerName: '', phone: '', email: '', address: '', note: '',
+    importDate: '', exportDate: '', containerIds: [] as string[],
+  });
 
   // Cancel order
   const [openCancel, setOpenCancel] = useState(false);
@@ -100,8 +126,17 @@ export default function Orders() {
     }
   };
 
+  const fetchMyContainers = async () => {
+    try {
+      const res = await fetch(`${apiUrl}/admin/containers/my?page=0&size=100&sortBy=containerId&direction=asc`, { headers });
+      const data = await res.json();
+      if (res.ok) setMyContainers(data.data?.content || []);
+    } catch { /* ignore */ }
+  };
+
   useEffect(() => {
     fetchOrders(page);
+    fetchMyContainers();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page]);
 
@@ -124,19 +159,90 @@ export default function Orders() {
     setCreateForm({
       customerName: user?.name || '',
       phone: '', email: user?.email || '', address: '', note: '',
+      importDate: '', exportDate: '', containerIds: [],
     });
 
   const submitCreate = async () => {
     try {
       if (!createForm.customerName.trim()) return alert('Tên khách hàng không được để trống');
+      const body: Record<string, any> = {
+        customerName: createForm.customerName,
+        phone: createForm.phone || undefined,
+        email: createForm.email || undefined,
+        address: createForm.address || undefined,
+        note: createForm.note || undefined,
+        importDate: createForm.importDate || undefined,
+        exportDate: createForm.exportDate || undefined,
+        containerIds: createForm.containerIds.length > 0 ? createForm.containerIds : undefined,
+      };
       const res = await fetch(`${apiUrl}/orders`, {
         method: 'POST', headers,
-        body: JSON.stringify(createForm),
+        body: JSON.stringify(body),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || 'Lỗi tạo đơn hàng');
       setOpenCreate(false);
       resetCreateForm();
+      await fetchOrders(page);
+    } catch (e: any) {
+      alert(e.message || 'Lỗi không xác định');
+    }
+  };
+
+  const openEditDialog = (order: OrderItem) => {
+    setEditTarget(order);
+    setEditForm({
+      customerName: order.customerName || '',
+      phone: order.phone || '',
+      email: order.email || '',
+      address: order.address || '',
+      note: order.note || '',
+      importDate: order.importDate || '',
+      exportDate: order.exportDate || '',
+      containerIds: order.containerIds ? [...order.containerIds] : [],
+    });
+    setOpenEdit(true);
+  };
+
+  const toggleEditContainer = (id: string) => {
+    setEditForm((f) => ({
+      ...f,
+      containerIds: f.containerIds.includes(id)
+        ? f.containerIds.filter((c) => c !== id)
+        : [...f.containerIds, id],
+    }));
+  };
+
+  const toggleCreateContainer = (id: string) => {
+    setCreateForm((f) => ({
+      ...f,
+      containerIds: f.containerIds.includes(id)
+        ? f.containerIds.filter((c) => c !== id)
+        : [...f.containerIds, id],
+    }));
+  };
+
+  const submitEdit = async () => {
+    if (!editTarget) return;
+    try {
+      if (!editForm.customerName.trim()) return alert('Tên khách hàng không được để trống');
+      const body: Record<string, any> = {
+        customerName: editForm.customerName,
+        phone: editForm.phone || undefined,
+        email: editForm.email || undefined,
+        address: editForm.address || undefined,
+        note: editForm.note || undefined,
+        importDate: editForm.importDate || undefined,
+        exportDate: editForm.exportDate || undefined,
+        containerIds: editForm.containerIds.length > 0 ? editForm.containerIds : undefined,
+      };
+      const res = await fetch(`${apiUrl}/orders/${editTarget.orderId}`, {
+        method: 'PUT', headers, body: JSON.stringify(body),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'Lỗi cập nhật đơn hàng');
+      setOpenEdit(false);
+      setEditTarget(null);
       await fetchOrders(page);
     } catch (e: any) {
       alert(e.message || 'Lỗi không xác định');
@@ -184,7 +290,9 @@ export default function Orders() {
     }
   };
 
-  const canCancel = (o: OrderItem) => o.statusName === 'PENDING' || o.statusName === 'APPROVED';
+  const canCancel = (o: OrderItem) =>
+    ['PENDING', 'APPROVED', 'WAITING_CHECKIN', 'LATE_CHECKIN'].includes(o.statusName);
+  const canEdit   = (o: OrderItem) => o.statusName === 'PENDING';
 
   return (
     <WarehouseLayout>
@@ -290,6 +398,11 @@ export default function Orders() {
                           <Badge className={STATUS_CLASS[o.statusName] || 'bg-gray-100 text-gray-600'}>
                             {STATUS_LABELS[o.statusName] || o.statusName}
                           </Badge>
+                          {o.statusName === 'LATE_CHECKIN' && (
+                            <div className="text-xs text-red-600 mt-1 font-medium">
+                              ⚠ Quá hạn check-in. Hủy trong {3} ngày để hoàn tiền.
+                            </div>
+                          )}
                           {o.cancellation?.reason && (
                             <div className="text-xs text-red-500 mt-1">{o.cancellation.reason}</div>
                           )}
@@ -308,6 +421,16 @@ export default function Orders() {
                             >
                               <FileText className="w-4 h-4" />
                             </Button>
+                            {canEdit(o) && (
+                              <Button
+                                variant="ghost" size="sm"
+                                className="text-gray-700 hover:bg-gray-50"
+                                onClick={() => openEditDialog(o)}
+                                title="Sửa đơn hàng"
+                              >
+                                <Pencil className="w-4 h-4" />
+                              </Button>
+                            )}
                             {canCancel(o) && (
                               <Button
                                 variant="ghost" size="sm"
@@ -345,7 +468,7 @@ export default function Orders() {
 
         {/* Create order dialog */}
         <Dialog open={openCreate} onOpenChange={(o) => { setOpenCreate(o); if (!o) resetCreateForm(); }}>
-          <DialogContent className="max-w-lg">
+          <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Tạo đơn hàng mới</DialogTitle>
               <DialogDescription>Điền thông tin để đặt đơn hàng lưu kho.</DialogDescription>
@@ -369,6 +492,33 @@ export default function Orders() {
                 <div className="text-sm font-medium text-gray-700">Địa chỉ</div>
                 <Input value={createForm.address} onChange={(e) => setCreateForm((f) => ({ ...f, address: e.target.value }))} placeholder="123 Đường ABC, TP.HCM" />
               </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <div className="text-sm font-medium text-gray-700">Ngày nhập kho</div>
+                  <Input type="date" value={createForm.importDate} onChange={(e) => setCreateForm((f) => ({ ...f, importDate: e.target.value }))} />
+                </div>
+                <div className="space-y-1">
+                  <div className="text-sm font-medium text-gray-700">Ngày xuất kho</div>
+                  <Input type="date" value={createForm.exportDate} onChange={(e) => setCreateForm((f) => ({ ...f, exportDate: e.target.value }))} />
+                </div>
+              </div>
+              {myContainers.length > 0 && (
+                <div className="space-y-1">
+                  <div className="text-sm font-medium text-gray-700">Container ({createForm.containerIds.length} đã chọn)</div>
+                  <div className="max-h-32 overflow-y-auto border border-gray-200 rounded-md p-2 space-y-1">
+                    {myContainers.map((c) => (
+                      <label key={c.containerId} className="flex items-center gap-2 cursor-pointer text-sm">
+                        <input
+                          type="checkbox"
+                          checked={createForm.containerIds.includes(c.containerId)}
+                          onChange={() => toggleCreateContainer(c.containerId)}
+                        />
+                        <span className="font-mono">{c.containerId}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
               <div className="space-y-1">
                 <div className="text-sm font-medium text-gray-700">Ghi chú</div>
                 <Input value={createForm.note} onChange={(e) => setCreateForm((f) => ({ ...f, note: e.target.value }))} placeholder="Yêu cầu đặc biệt..." />
@@ -377,6 +527,71 @@ export default function Orders() {
             <DialogFooter>
               <Button variant="outline" onClick={() => setOpenCreate(false)}>Hủy</Button>
               <Button className="bg-blue-900 hover:bg-blue-800 text-white" onClick={submitCreate}>Tạo đơn</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Edit order dialog (PENDING only) */}
+        <Dialog open={openEdit} onOpenChange={(o) => { setOpenEdit(o); if (!o) setEditTarget(null); }}>
+          <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Sửa đơn hàng #{editTarget?.orderId}</DialogTitle>
+              <DialogDescription>Chỉ đơn hàng đang chờ duyệt mới có thể chỉnh sửa.</DialogDescription>
+            </DialogHeader>
+            <div className="space-y-3">
+              <div className="space-y-1">
+                <div className="text-sm font-medium text-gray-700">Tên khách hàng <span className="text-red-500">*</span></div>
+                <Input value={editForm.customerName} onChange={(e) => setEditForm((f) => ({ ...f, customerName: e.target.value }))} />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <div className="text-sm font-medium text-gray-700">Số điện thoại</div>
+                  <Input value={editForm.phone} onChange={(e) => setEditForm((f) => ({ ...f, phone: e.target.value }))} />
+                </div>
+                <div className="space-y-1">
+                  <div className="text-sm font-medium text-gray-700">Email</div>
+                  <Input type="email" value={editForm.email} onChange={(e) => setEditForm((f) => ({ ...f, email: e.target.value }))} />
+                </div>
+              </div>
+              <div className="space-y-1">
+                <div className="text-sm font-medium text-gray-700">Địa chỉ</div>
+                <Input value={editForm.address} onChange={(e) => setEditForm((f) => ({ ...f, address: e.target.value }))} />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <div className="text-sm font-medium text-gray-700">Ngày nhập kho</div>
+                  <Input type="date" value={editForm.importDate} onChange={(e) => setEditForm((f) => ({ ...f, importDate: e.target.value }))} />
+                </div>
+                <div className="space-y-1">
+                  <div className="text-sm font-medium text-gray-700">Ngày xuất kho</div>
+                  <Input type="date" value={editForm.exportDate} onChange={(e) => setEditForm((f) => ({ ...f, exportDate: e.target.value }))} />
+                </div>
+              </div>
+              {myContainers.length > 0 && (
+                <div className="space-y-1">
+                  <div className="text-sm font-medium text-gray-700">Container ({editForm.containerIds.length} đã chọn)</div>
+                  <div className="max-h-32 overflow-y-auto border border-gray-200 rounded-md p-2 space-y-1">
+                    {myContainers.map((c) => (
+                      <label key={c.containerId} className="flex items-center gap-2 cursor-pointer text-sm">
+                        <input
+                          type="checkbox"
+                          checked={editForm.containerIds.includes(c.containerId)}
+                          onChange={() => toggleEditContainer(c.containerId)}
+                        />
+                        <span className="font-mono">{c.containerId}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
+              <div className="space-y-1">
+                <div className="text-sm font-medium text-gray-700">Ghi chú</div>
+                <Input value={editForm.note} onChange={(e) => setEditForm((f) => ({ ...f, note: e.target.value }))} />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setOpenEdit(false)}>Hủy</Button>
+              <Button className="bg-blue-900 hover:bg-blue-800 text-white" onClick={submitEdit}>Cập nhật</Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>

@@ -18,20 +18,20 @@ const ROLE_LABELS: Record<string, string> = {
 };
 
 const navItems = [
-  { icon: LayoutDashboard, label: 'Tổng quan', path: '/yard/tong-quan' },
+  { icon: LayoutDashboard, label: 'Tổng quan', path: '/yard3d/tong-quan' },
   {
     icon: Box,
     label: 'Điều độ bãi & Tối ưu hóa',
     path: '#',
     subItems: [
-      { label: 'Sơ đồ 3D trực quan', path: '/yard/3d' },
-      { label: 'Sơ đồ mặt phẳng', path: '/yard/2d' },
+      { label: 'Sơ đồ 3D trực quan', path: '/yard3d/3d' },
+      { label: 'Sơ đồ mặt phẳng', path: '/yard3d/2d' },
     ],
   },
-  { icon: Truck, label: 'Quản lý nhập bãi', path: '/yard/ha-bai' },
-  { icon: Truck, label: 'Quản lý xuất bãi', path: '/yard/xuat-bai' },
-  { icon: Box, label: 'Quản lý Kho & Container', path: '/yard/kho' },
-  { icon: AlertTriangle, label: 'Kiểm soát & Sự cố', path: '/yard/kiem-soat' },
+  { icon: Truck, label: 'Quản lý nhập bãi', path: '/yard3d/ha-bai' },
+  { icon: Truck, label: 'Quản lý xuất bãi', path: '/yard3d/xuat-bai' },
+  { icon: Box, label: 'Quản lý Kho & Container', path: '/yard3d/kho' },
+  { icon: AlertTriangle, label: 'Kiểm soát & Sự cố', path: '/yard3d/kiem-soat' },
 ];
 
 function NavItemRenderer({ item, location }: { item: typeof navItems[0]; location: any }) {

@@ -18,7 +18,7 @@ const navGroups = [
       { label: 'Hãng Tàu', to: '/warehouse/admin/section/quan-ly-hang-tau', icon: 'ship' },
       { label: 'Lịch Trình', to: '/warehouse/admin/section/quan-ly-lich', icon: 'calendar' },
       { label: 'Cước Phí', to: '/warehouse/admin/section/quan-ly-cuoc-phi-bieu-cuoc', icon: 'dollar' },
-      { label: 'Quản lý kho', to: '/yard/tong-quan', icon: 'warehouse' },
+      { label: 'Quản lý kho', to: '/yard3d/tong-quan', icon: 'warehouse' },
     ],
   },
   {
@@ -130,7 +130,7 @@ export default function AdminSidebar() {
 
   return (
     <aside className="sidebar">
-      <NavLink to="/warehouse/admin/dashboard" className="sidebar-logo" style={{ display: 'flex', alignItems: 'center', gap: '12px', textDecoration: 'none' }}>
+      <NavLink to="/" className="sidebar-logo" style={{ display: 'flex', alignItems: 'center', gap: '12px', textDecoration: 'none' }}>
         <div
           style={{
             width: '40px',

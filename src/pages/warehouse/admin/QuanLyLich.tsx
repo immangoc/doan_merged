@@ -7,6 +7,7 @@ type Schedule = {
   companyName?: string;
   shipName?: string;
   type?: string;
+  shipType?: string;
   timeStart?: string;
   timeEnd?: string;
   location?: string;
@@ -15,10 +16,13 @@ type Schedule = {
   createdAt?: string;
 };
 
+type ShippingCompany = { companyId: number; name: string };
+
 type ScheduleForm = {
   companyName: string;
   shipName: string;
   type: string;
+  shipType: string;
   timeStart: string;
   timeEnd: string;
   location: string;
@@ -27,7 +31,7 @@ type ScheduleForm = {
 };
 
 const EMPTY_FORM: ScheduleForm = {
-  companyName: '', shipName: '', type: 'IMPORT',
+  companyName: '', shipName: '', type: 'IMPORT', shipType: '',
   timeStart: '', timeEnd: '', location: '',
   containers: '', status: 'SCHEDULED',
 };
@@ -40,6 +44,7 @@ export default function QuanLyLich() {
   }), [accessToken]);
 
   const [data, setData] = useState<Schedule[]>([]);
+  const [companies, setCompanies] = useState<ShippingCompany[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -53,10 +58,15 @@ export default function QuanLyLich() {
     setLoading(true);
     setError('');
     try {
-      const res = await fetch(`${API_BASE}/admin/schedules`, { headers });
-      const d = await res.json();
-      if (!res.ok) throw new Error(d.message || 'Lỗi tải dữ liệu');
-      setData(d.data || []);
+      const [schedRes, compRes] = await Promise.all([
+        fetch(`${API_BASE}/admin/schedules`, { headers }),
+        fetch(`${API_BASE}/admin/shipping-companies`, { headers }),
+      ]);
+      const sd = await schedRes.json();
+      const cd = await compRes.json();
+      if (!schedRes.ok) throw new Error(sd.message || 'Lỗi tải lịch trình');
+      setData(sd.data || []);
+      if (compRes.ok) setCompanies(cd.data || []);
     } catch (e: any) {
       setError(e.message || 'Lỗi không xác định');
     } finally {
@@ -79,6 +89,7 @@ export default function QuanLyLich() {
       companyName: item.companyName || '',
       shipName: item.shipName || '',
       type: item.type || 'IMPORT',
+      shipType: item.shipType || '',
       timeStart: item.timeStart ? item.timeStart.slice(0, 16) : '',
       timeEnd: item.timeEnd ? item.timeEnd.slice(0, 16) : '',
       location: item.location || '',
@@ -110,6 +121,7 @@ export default function QuanLyLich() {
         companyName: form.companyName || undefined,
         shipName: form.shipName || undefined,
         type: form.type || undefined,
+        shipType: form.shipType || undefined,
         location: form.location || undefined,
         status: form.status || undefined,
       };
@@ -165,19 +177,20 @@ export default function QuanLyLich() {
             <table>
               <thead>
                 <tr>
-                  <th>ID</th><th>Hãng tàu</th><th>Tên tàu</th><th>Loại</th>
+                  <th>ID</th><th>Hãng tàu</th><th>Tên tàu</th><th>Loại tàu</th><th>Loại chuyến</th>
                   <th>Thời gian bắt đầu</th><th>Trạng thái</th><th>Thao tác</th>
                 </tr>
               </thead>
               <tbody>
                 {data.length === 0 ? (
-                  <tr><td colSpan={7} style={{ color: 'var(--text2)' }}>Chưa có dữ liệu.</td></tr>
+                  <tr><td colSpan={8} style={{ color: 'var(--text2)' }}>Chưa có dữ liệu.</td></tr>
                 ) : (
                   data.map((row) => (
                     <tr key={row.scheduleId}>
                       <td><code>{row.scheduleId}</code></td>
                       <td>{row.companyName || '—'}</td>
                       <td>{row.shipName || '—'}</td>
+                      <td>{row.shipType || '—'}</td>
                       <td>
                         <span className={`badge ${row.type === 'IMPORT' || row.type === 'import' ? 'badge-success' : 'badge-info'}`}>
                           {row.type || '—'}
@@ -210,18 +223,27 @@ export default function QuanLyLich() {
           <div className="form-row">
             <div className="form-group">
               <label className="form-label">Hãng tàu</label>
-              <input className="form-input" placeholder="VD: Maersk Line" value={form.companyName} onChange={(e) => setField('companyName', e.target.value)} />
+              <select className="form-input" value={form.companyName} onChange={(e) => setField('companyName', e.target.value)}>
+                <option value="">-- Chọn hãng tàu --</option>
+                {companies.map((c) => (
+                  <option key={c.companyId} value={c.name}>{c.name}</option>
+                ))}
+              </select>
             </div>
             <div className="form-group">
               <label className="form-label">Tên tàu</label>
               <input className="form-input" placeholder="VD: Maersk Seletar" value={form.shipName} onChange={(e) => setField('shipName', e.target.value)} />
             </div>
             <div className="form-group">
-              <label className="form-label">Loại</label>
+              <label className="form-label">Loại chuyến</label>
               <select className="form-input" value={form.type} onChange={(e) => setField('type', e.target.value)}>
                 <option value="IMPORT">IMPORT (Nhập)</option>
                 <option value="EXPORT">EXPORT (Xuất)</option>
               </select>
+            </div>
+            <div className="form-group">
+              <label className="form-label">Loại tàu</label>
+              <input className="form-input" placeholder="VD: Container Ship" value={form.shipType} onChange={(e) => setField('shipType', e.target.value)} />
             </div>
             <div className="form-group">
               <label className="form-label">Trạng thái</label>

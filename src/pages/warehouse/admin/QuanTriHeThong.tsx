@@ -78,13 +78,6 @@ export default function QuanTriHeThong() {
 
   useEffect(() => { fetchData(0); }, []);
 
-  const openAdd = () => {
-    setEditItem(null);
-    setForm(EMPTY_FORM);
-    setFormError('');
-    setOpen(true);
-  };
-
   const openEdit = (user: UserItem) => {
     setEditItem(user);
     setForm({
@@ -105,37 +98,16 @@ export default function QuanTriHeThong() {
     setForm((prev) => ({ ...prev, [key]: value }));
 
   const handleSave = async () => {
-    if (!form.email.trim()) { setFormError('Vui lòng nhập email!'); return; }
-    if (!editItem && !form.password.trim()) { setFormError('Vui lòng nhập mật khẩu!'); return; }
+    if (!editItem) return;
     setSaving(true);
     setFormError('');
     try {
-      if (editItem) {
-        const body: Record<string, string> = {};
-        if (form.fullName) body.fullName = form.fullName;
-        if (form.email) body.email = form.email;
-        if (form.phone) body.phone = form.phone;
-        if (form.roleName) body.roleName = form.roleName;
-        const res = await fetch(`${API_BASE}/admin/users/${editItem.userId}`, {
-          method: 'PUT', headers, body: JSON.stringify(body),
-        });
-        const d = await res.json();
-        if (!res.ok) throw new Error(d.message || 'Lỗi cập nhật');
-      } else {
-        const body: Record<string, string> = {
-          username: form.username,
-          fullName: form.fullName,
-          email: form.email,
-          password: form.password,
-          roleName: form.roleName,
-        };
-        if (form.phone) body.phone = form.phone;
-        const res = await fetch(`${API_BASE}/admin/users`, {
-          method: 'POST', headers, body: JSON.stringify(body),
-        });
-        const d = await res.json();
-        if (!res.ok) throw new Error(d.message || 'Lỗi tạo người dùng');
-      }
+      const body: Record<string, string> = { roleName: form.roleName };
+      const res = await fetch(`${API_BASE}/admin/users/${editItem.userId}`, {
+        method: 'PUT', headers, body: JSON.stringify(body),
+      });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.message || 'Lỗi cập nhật');
       closeModal();
       fetchData(page);
     } catch (e: any) {
@@ -168,7 +140,6 @@ export default function QuanTriHeThong() {
       <PageHeader
         title="Quản trị hệ thống"
         subtitle={`Quản lý tài khoản người dùng (${total} tài khoản)`}
-        action={<button type="button" className="btn btn-primary" onClick={openAdd}>+ Thêm tài khoản</button>}
       />
 
       {error && (
@@ -236,38 +207,14 @@ export default function QuanTriHeThong() {
 
       {/* Add/Edit modal */}
       <div className={`modal-overlay${open ? ' open' : ''}`} onClick={(e) => e.target === e.currentTarget && closeModal()}>
-        <div className="modal" style={{ maxWidth: 520 }}>
+        <div className="modal" style={{ maxWidth: 400 }}>
           <div className="modal-header">
-            <div className="modal-title">{editItem ? 'Sửa tài khoản' : 'Thêm tài khoản'}</div>
+            <div className="modal-title">Chỉnh sửa vai trò — {editItem?.username || editItem?.email}</div>
             <button type="button" className="modal-close" onClick={closeModal}>✕</button>
           </div>
           {formError && <div style={{ color: 'var(--danger)', fontSize: 13, marginBottom: 8 }}>{formError}</div>}
           <div className="form-row">
-            {!editItem && (
-              <div className="form-group">
-                <label className="form-label">Tên đăng nhập *</label>
-                <input className="form-input" placeholder="VD: john.doe" value={form.username} onChange={(e) => setField('username', e.target.value)} />
-              </div>
-            )}
-            <div className="form-group">
-              <label className="form-label">Họ và tên</label>
-              <input className="form-input" placeholder="VD: Nguyễn Văn A" value={form.fullName} onChange={(e) => setField('fullName', e.target.value)} />
-            </div>
-            <div className="form-group">
-              <label className="form-label">Email *</label>
-              <input className="form-input" type="email" placeholder="VD: user@example.com" value={form.email} onChange={(e) => setField('email', e.target.value)} />
-            </div>
-            {!editItem && (
-              <div className="form-group">
-                <label className="form-label">Mật khẩu *</label>
-                <input className="form-input" type="password" placeholder="Mật khẩu ban đầu" value={form.password} onChange={(e) => setField('password', e.target.value)} />
-              </div>
-            )}
-            <div className="form-group">
-              <label className="form-label">Điện thoại</label>
-              <input className="form-input" placeholder="VD: 0901234567" value={form.phone} onChange={(e) => setField('phone', e.target.value)} />
-            </div>
-            <div className="form-group">
+            <div className="form-group" style={{ gridColumn: '1 / -1' }}>
               <label className="form-label">Vai trò</label>
               <select className="form-input" value={form.roleName} onChange={(e) => setField('roleName', e.target.value)}>
                 <option value="ADMIN">Admin</option>
@@ -280,7 +227,7 @@ export default function QuanTriHeThong() {
           <div className="form-actions">
             <button type="button" className="btn btn-secondary" onClick={closeModal}>Hủy</button>
             <button type="button" className="btn btn-primary" onClick={handleSave} disabled={saving}>
-              {saving ? 'Đang lưu...' : editItem ? 'Cập nhật' : 'Tạo tài khoản'}
+              {saving ? 'Đang lưu...' : 'Cập nhật vai trò'}
             </button>
           </div>
         </div>

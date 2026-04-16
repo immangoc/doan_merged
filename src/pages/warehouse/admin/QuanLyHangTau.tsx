@@ -8,6 +8,8 @@ type ShippingCompany = {
   phone?: string;
   email?: string;
   address?: string;
+  code?: string;
+  country?: string;
   createdAt?: string;
 };
 
@@ -24,7 +26,7 @@ export default function QuanLyHangTau() {
 
   const [open, setOpen] = useState(false);
   const [editItem, setEditItem] = useState<ShippingCompany | null>(null);
-  const [form, setForm] = useState({ name: '', phone: '', email: '', address: '' });
+  const [form, setForm] = useState({ name: '', phone: '', email: '', address: '', code: '', country: '' });
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState('');
 
@@ -47,14 +49,14 @@ export default function QuanLyHangTau() {
 
   const openAdd = () => {
     setEditItem(null);
-    setForm({ name: '', phone: '', email: '', address: '' });
+    setForm({ name: '', phone: '', email: '', address: '', code: '', country: '' });
     setFormError('');
     setOpen(true);
   };
 
   const openEdit = (item: ShippingCompany) => {
     setEditItem(item);
-    setForm({ name: item.name, phone: item.phone || '', email: item.email || '', address: item.address || '' });
+    setForm({ name: item.name, phone: item.phone || '', email: item.email || '', address: item.address || '', code: item.code || '', country: item.country || '' });
     setFormError('');
     setOpen(true);
   };
@@ -76,6 +78,8 @@ export default function QuanLyHangTau() {
       if (form.phone) body.phone = form.phone;
       if (form.email) body.email = form.email;
       if (form.address) body.address = form.address;
+      if (form.code) body.code = form.code;
+      if (form.country) body.country = form.country;
       const res = await fetch(url, { method, headers, body: JSON.stringify(body) });
       const d = await res.json();
       if (!res.ok) throw new Error(d.message || 'Lỗi lưu dữ liệu');
@@ -123,16 +127,18 @@ export default function QuanLyHangTau() {
           <div className="table-wrap">
             <table>
               <thead>
-                <tr><th>ID</th><th>Tên hãng tàu</th><th>Điện thoại</th><th>Email</th><th>Ngày tạo</th><th>Thao tác</th></tr>
+                <tr><th>ID</th><th>Tên hãng tàu</th><th>Mã</th><th>Quốc gia</th><th>Điện thoại</th><th>Email</th><th>Ngày tạo</th><th>Thao tác</th></tr>
               </thead>
               <tbody>
                 {data.length === 0 ? (
-                  <tr><td colSpan={6} style={{ color: 'var(--text2)' }}>Chưa có dữ liệu.</td></tr>
+                  <tr><td colSpan={8} style={{ color: 'var(--text2)' }}>Chưa có dữ liệu.</td></tr>
                 ) : (
                   data.map((row) => (
                     <tr key={row.companyId}>
                       <td><code>{row.companyId}</code></td>
                       <td>{row.name}</td>
+                      <td>{row.code || '—'}</td>
+                      <td>{row.country || '—'}</td>
                       <td>{row.phone || '—'}</td>
                       <td>{row.email || '—'}</td>
                       <td>{row.createdAt ? new Date(row.createdAt).toLocaleDateString('vi-VN') : '—'}</td>
@@ -160,6 +166,14 @@ export default function QuanLyHangTau() {
             <div className="form-group" style={{ gridColumn: '1 / -1' }}>
               <label className="form-label">Tên hãng tàu *</label>
               <input className="form-input" placeholder="VD: Maersk Line" value={form.name} onChange={(e) => setField('name', e.target.value)} />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Mã hãng tàu</label>
+              <input className="form-input" placeholder="VD: MSK" value={form.code} onChange={(e) => setField('code', e.target.value)} />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Quốc gia</label>
+              <input className="form-input" placeholder="VD: Denmark" value={form.country} onChange={(e) => setField('country', e.target.value)} />
             </div>
             <div className="form-group">
               <label className="form-label">Điện thoại</label>

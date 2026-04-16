@@ -37,6 +37,11 @@ export default function CustomerChatBox() {
   const [loading, setLoading]     = useState(false);
   const [error, setError]         = useState('');
 
+  // Auto-reply tracking
+  const autoReplyTimerRef   = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const autoReplySentRef    = useRef(false);
+  const lastCustomerMsgTime = useRef<number>(0);
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef       = useRef<HTMLInputElement>(null);
 
@@ -105,6 +110,36 @@ export default function CustomerChatBox() {
     if (isOpen) setTimeout(() => inputRef.current?.focus(), 300);
   }, [isOpen]);
 
+  // ── Auto-reply: inject a local bot message after 30s if no staff reply ─────
+  const scheduleAutoReply = (roomId: number) => {
+    if (autoReplyTimerRef.current) clearTimeout(autoReplyTimerRef.current);
+    autoReplySentRef.current = false;
+    autoReplyTimerRef.current = setTimeout(async () => {
+      // Check whether a staff reply has arrived since customer sent
+      try {
+        const res = await fetch(`${API_BASE}/chat/rooms/${roomId}/messages?size=5`, { headers });
+        const d = await res.json();
+        if (!res.ok) return;
+        const msgs = ([...(d.data?.content || [])] as ChatMessage[]).reverse();
+        const hasStaffReply = msgs.some(
+          (m) => m.senderId !== currentUserId && new Date(m.createdAt).getTime() > lastCustomerMsgTime.current,
+        );
+        if (!hasStaffReply && !autoReplySentRef.current) {
+          autoReplySentRef.current = true;
+          // Inject a local synthetic message (not persisted to server)
+          const autoMsg: ChatMessage = {
+            messageId: -Date.now(),
+            senderId: 0,
+            senderName: 'Hùng Thủy Bot',
+            description: 'Cảm ơn bạn đã liên hệ! 🤝 Nhân viên của chúng tôi sẽ phản hồi trong thời gian sớm nhất. Bạn cũng có thể gọi hotline 1900 1234 hoặc email info@hungthuy.com để được hỗ trợ nhanh hơn.',
+            createdAt: new Date().toISOString(),
+          };
+          setMessages((prev) => [...prev, autoMsg]);
+        }
+      } catch { /* ignore */ }
+    }, 30_000);
+  };
+
   // ── Send message ──────────────────────────────────────────────────────────
   const sendMessage = async (text: string) => {
     if (!text.trim() || !activeRoom || sending) return;
@@ -117,6 +152,8 @@ export default function CustomerChatBox() {
         body: JSON.stringify({ description: text.trim() }),
       });
       await fetchMessages(activeRoom.roomId);
+      lastCustomerMsgTime.current = Date.now();
+      scheduleAutoReply(activeRoom.roomId);
     } catch { /* ignore */ } finally {
       setSending(false);
     }

@@ -11,23 +11,40 @@ type OrderItem = {
   statusName: string;
   note?: string;
   createdAt?: string;
+  importDate?: string;
+  exportDate?: string;
+  totalGrossWeight?: number;
   containerIds?: string[];
 };
 
 const STATUS_BADGE: Record<string, string> = {
-  PENDING: 'badge-warning',
-  APPROVED: 'badge-info',
-  REJECTED: 'badge-danger',
-  CANCELLED: 'badge-danger',
-  ACTIVE: 'badge-success',
+  PENDING:          'badge-warning',
+  APPROVED:         'badge-info',
+  WAITING_CHECKIN:  'badge-info',
+  LATE_CHECKIN:     'badge-danger',
+  IMPORTED:         'badge-success',
+  STORED:           'badge-success',
+  EXPORTED:         'badge-success',
+  REJECTED:         'badge-danger',
+  CANCELLED:        'badge-danger',
+  CANCEL_REQUESTED: 'badge-warning',
+  ACTIVE:           'badge-success',
+  COMPLETED:        'badge-success',
 };
 
 const STATUS_LABEL: Record<string, string> = {
-  PENDING: 'Chờ duyệt',
-  APPROVED: 'Đã duyệt',
-  REJECTED: 'Từ chối',
-  CANCELLED: 'Hủy',
-  ACTIVE: 'Hoạt động',
+  PENDING:          'Chờ duyệt',
+  APPROVED:         'Đã duyệt',
+  WAITING_CHECKIN:  'Chờ nhận hàng',
+  LATE_CHECKIN:     'Trễ check-in',
+  IMPORTED:         'Đã nhập kho',
+  STORED:           'Đang lưu kho',
+  EXPORTED:         'Đã xuất kho',
+  REJECTED:         'Từ chối',
+  CANCELLED:        'Đã hủy',
+  CANCEL_REQUESTED: 'Yêu cầu hủy',
+  ACTIVE:           'Hoạt động',
+  COMPLETED:        'Hoàn tất',
 };
 
 export default function DonHang() {
@@ -122,6 +139,41 @@ export default function DonHang() {
     }
   };
 
+  const handleApproveCancellation = async (orderId: number) => {
+    if (!window.confirm('Xác nhận chấp nhận yêu cầu hủy đơn hàng này?')) return;
+    try {
+      const res = await fetch(`${API_BASE}/admin/orders/${orderId}/approve-cancel`, { method: 'PUT', headers });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'Lỗi chấp nhận hủy');
+      setActionMsg('Đã chấp nhận yêu cầu hủy.');
+      fetchOrders(page);
+      setDetailOrder(null);
+      window.dispatchEvent(new CustomEvent('wms:notification-refresh'));
+    } catch (e: any) {
+      setActionMsg(e.message || 'Lỗi');
+    }
+  };
+
+  const handleAdminCancel = async (orderId: number) => {
+    const reason = window.prompt('Lý do hủy (tùy chọn):') ?? '';
+    if (reason === null) return; // user pressed Cancel on prompt
+    try {
+      const res = await fetch(`${API_BASE}/admin/orders/${orderId}/cancel`, {
+        method: 'PUT',
+        headers,
+        body: JSON.stringify({ reason }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'Lỗi hủy đơn');
+      setActionMsg('Đã hủy đơn hàng.');
+      fetchOrders(page);
+      setDetailOrder(null);
+      window.dispatchEvent(new CustomEvent('wms:notification-refresh'));
+    } catch (e: any) {
+      setActionMsg(e.message || 'Lỗi');
+    }
+  };
+
   const pending = orders.filter((o) => o.statusName === 'PENDING').length;
   const approved = orders.filter((o) => o.statusName === 'APPROVED').length;
   const cancelled = orders.filter((o) => o.statusName === 'CANCELLED' || o.statusName === 'REJECTED').length;
@@ -177,18 +229,24 @@ export default function DonHang() {
             <table>
               <thead>
                 <tr>
-                  <th>Mã đơn</th><th>Khách hàng</th><th>Ngày đặt</th><th>Số container</th><th>Trạng thái</th><th>Thao tác</th>
+                  <th>Mã đơn</th><th>Khách hàng</th><th>Ngày đặt</th>
+                  <th>Ngày nhập</th><th>Ngày xuất</th>
+                  <th>Tổng KL (kg)</th><th>Số container</th>
+                  <th>Trạng thái</th><th>Thao tác</th>
                 </tr>
               </thead>
               <tbody>
                 {orders.length === 0 ? (
-                  <tr><td colSpan={6} style={{ color: 'var(--text2)' }}>Không có đơn hàng nào.</td></tr>
+                  <tr><td colSpan={9} style={{ color: 'var(--text2)' }}>Không có đơn hàng nào.</td></tr>
                 ) : (
                   orders.map((order) => (
                     <tr key={order.orderId}>
                       <td>#{order.orderId}</td>
                       <td>{order.customerName || '—'}</td>
                       <td>{order.createdAt ? new Date(order.createdAt).toLocaleDateString('vi-VN') : '—'}</td>
+                      <td>{order.importDate || '—'}</td>
+                      <td>{order.exportDate || '—'}</td>
+                      <td>{order.totalGrossWeight != null ? Number(order.totalGrossWeight).toLocaleString() : '—'}</td>
                       <td>{order.containerIds?.length ?? 0}</td>
                       <td>
                         <span className={`badge ${STATUS_BADGE[order.statusName] || 'badge-gray'}`}>
@@ -243,17 +301,33 @@ export default function DonHang() {
                   </div>
                   <div><div style={{ color: 'var(--text2)' }}>Điện thoại</div><div style={{ fontWeight: 500 }}>{detailOrder.phone || '—'}</div></div>
                   <div><div style={{ color: 'var(--text2)' }}>Email</div><div style={{ fontWeight: 500 }}>{detailOrder.email || '—'}</div></div>
-                  <div style={{ gridColumn: '1 / -1' }}><div style={{ color: 'var(--text2)' }}>Địa chỉ</div><div style={{ fontWeight: 500 }}>{detailOrder.address || '—'}</div></div>
-                  <div style={{ gridColumn: '1 / -1' }}><div style={{ color: 'var(--text2)' }}>Ghi chú</div><div style={{ fontWeight: 500 }}>{detailOrder.note || '—'}</div></div>
-                  {detailOrder.containerIds && detailOrder.containerIds.length > 0 && (
-                    <div style={{ gridColumn: '1 / -1' }}>
-                      <div style={{ color: 'var(--text2)' }}>Containers</div>
-                      <div style={{ fontWeight: 500 }}>{detailOrder.containerIds.join(', ')}</div>
-                    </div>
+                  <div><div style={{ color: 'var(--text2)' }}>Ngày nhập kho</div><div style={{ fontWeight: 500 }}>{detailOrder.importDate || '—'}</div></div>
+                  <div><div style={{ color: 'var(--text2)' }}>Ngày xuất kho</div><div style={{ fontWeight: 500 }}>{detailOrder.exportDate || '—'}</div></div>
+                  {detailOrder.totalGrossWeight != null && (
+                    <div><div style={{ color: 'var(--text2)' }}>Tổng trọng lượng</div><div style={{ fontWeight: 500 }}>{Number(detailOrder.totalGrossWeight).toLocaleString()} kg</div></div>
                   )}
                   <div><div style={{ color: 'var(--text2)' }}>Ngày tạo</div>
                     <div style={{ fontWeight: 500 }}>{detailOrder.createdAt ? new Date(detailOrder.createdAt).toLocaleString('vi-VN') : '—'}</div>
                   </div>
+                  <div style={{ gridColumn: '1 / -1' }}><div style={{ color: 'var(--text2)' }}>Địa chỉ</div><div style={{ fontWeight: 500 }}>{detailOrder.address || '—'}</div></div>
+                  <div style={{ gridColumn: '1 / -1' }}><div style={{ color: 'var(--text2)' }}>Ghi chú</div><div style={{ fontWeight: 500 }}>{detailOrder.note || '—'}</div></div>
+                  {detailOrder.containerIds && detailOrder.containerIds.length > 0 && (
+                    <div style={{ gridColumn: '1 / -1' }}>
+                      <div style={{ color: 'var(--text2)', marginBottom: 4 }}>Containers</div>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                        {detailOrder.containerIds.map((cid) => (
+                          <code
+                            key={cid}
+                            style={{ background: 'var(--bg2)', padding: '2px 8px', borderRadius: 4, cursor: 'pointer', color: 'var(--primary)', textDecoration: 'underline' }}
+                            title={`Container ${cid}`}
+                            onClick={() => window.open(`/warehouse/admin/containers?search=${encodeURIComponent(cid)}`, '_self')}
+                          >
+                            {cid}
+                          </code>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
                 <div className="form-actions">
                   <button type="button" className="btn btn-secondary" onClick={() => { setDetailOrder(null); setActionMsg(''); }}>Đóng</button>
@@ -262,6 +336,16 @@ export default function DonHang() {
                       <button type="button" className="btn btn-primary" onClick={() => handleApprove(detailOrder.orderId)}>✓ Duyệt</button>
                       <button type="button" className="btn btn-danger btn-sm" onClick={() => handleReject(detailOrder.orderId)}>✕ Từ chối</button>
                     </>
+                  )}
+                  {detailOrder.statusName === 'CANCEL_REQUESTED' && (
+                    <button type="button" className="btn btn-primary" onClick={() => handleApproveCancellation(detailOrder.orderId)}>
+                      ✓ Chấp nhận hủy
+                    </button>
+                  )}
+                  {!['CANCELLED', 'EXPORTED', 'COMPLETED', 'REJECTED'].includes(detailOrder.statusName) && (
+                    <button type="button" className="btn btn-danger btn-sm" onClick={() => handleAdminCancel(detailOrder.orderId)}>
+                      Hủy đơn (Admin)
+                    </button>
                   )}
                 </div>
               </>

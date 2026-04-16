@@ -15,6 +15,7 @@ type ContainerItem = {
   cargoTypeName?: string;
   attributeName?: string;
   grossWeight?: number;
+  declaredValue?: number;
   sealNumber?: string;
   note?: string;
   createdAt?: string;
@@ -52,6 +53,7 @@ export default function MyContainers() {
     containerTypeId: 0,
     cargoTypeId:     0,
     grossWeight:     '',
+    declaredValue:   '',
     note:            '',
   });
   const [creating, setCreating]   = useState(false);
@@ -148,6 +150,7 @@ export default function MyContainers() {
           containerTypeId: createForm.containerTypeId,
           cargoTypeId:     createForm.cargoTypeId,
           grossWeight:     parseFloat(createForm.grossWeight) || 0,
+          declaredValue:   createForm.declaredValue ? parseFloat(createForm.declaredValue) : undefined,
           note:            createForm.note.trim() || undefined,
         }),
       });
@@ -174,7 +177,7 @@ export default function MyContainers() {
       }
 
       setShowCreate(false);
-      setCreateForm({ containerId: '', containerTypeId: containerTypes[0]?.id ?? 0, cargoTypeId: cargoTypes[0]?.id ?? 0, grossWeight: '', note: '' });
+      setCreateForm({ containerId: '', containerTypeId: containerTypes[0]?.id ?? 0, cargoTypeId: cargoTypes[0]?.id ?? 0, grossWeight: '', declaredValue: '', note: '' });
       await fetchContainers(0);
     } catch (e: any) {
       setCreateError(e.message || 'Lỗi không xác định');
@@ -268,6 +271,17 @@ export default function MyContainers() {
                 </div>
 
                 <div>
+                  <label className="block text-sm font-medium mb-1">Giá trị hàng hóa (VND)</label>
+                  <Input
+                    type="number"
+                    value={createForm.declaredValue}
+                    onChange={(e) => setCreateForm({ ...createForm, declaredValue: e.target.value })}
+                    placeholder="VD: 100000000"
+                    min={0}
+                  />
+                </div>
+
+                <div>
                   <label className="block text-sm font-medium mb-1">Ghi chú</label>
                   <textarea
                     value={createForm.note}
@@ -343,6 +357,9 @@ export default function MyContainers() {
                             )}
                             {c.grossWeight != null && (
                               <div><span className="font-semibold">Trọng lượng:</span> {c.grossWeight} kg</div>
+                            )}
+                            {c.declaredValue != null && (
+                              <div><span className="font-semibold">Giá trị:</span> {c.declaredValue.toLocaleString('vi-VN')} VND</div>
                             )}
                             {c.sealNumber && (
                               <div><span className="font-semibold">Seal:</span> {c.sealNumber}</div>

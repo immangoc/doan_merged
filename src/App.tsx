@@ -25,9 +25,6 @@ import MyContainers from './pages/warehouse/role/MyContainers';
 import Orders from './pages/warehouse/role/Orders';
 import Payments from './pages/warehouse/role/Payments';
 
-// Yard 3D module (merged from 3d project)
-import YardApp from './yard3d/YardApp';
-
 // Public Pages
 import HomePage from './pages/HomePage';
 import AboutPage from './pages/AboutPage';
@@ -35,6 +32,9 @@ import ContactPage from './pages/ContactPage';
 import NewsPage from './pages/NewsPage';
 import NewsDetailPage from './pages/NewsDetailPage';
 import ManagementSystemPage from './pages/ManagementSystemPage';
+
+// Yard3D module
+import YardApp from './yard3d/YardApp';
 
 export default function App() {
   return (
@@ -160,11 +160,11 @@ export default function App() {
             }
           />
 
-          {/* Yard 3D — visualization & yard operations (admin, operator) */}
+          {/* Yard3D Module — Warehouse 3D management interface */}
           <Route
-            path="/yard/*"
+            path="/yard3d/*"
             element={
-              <ProtectedRoute allowedRoles={['admin', 'planner', 'operator']}>
+              <ProtectedRoute allowedRoles={['admin', 'operator']}>
                 <YardApp />
               </ProtectedRoute>
             }

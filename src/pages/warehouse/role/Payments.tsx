@@ -1,28 +1,64 @@
 import { useEffect, useMemo, useState } from 'react';
-import { CalendarDays, DollarSign, RefreshCw } from 'lucide-react';
+import { CalendarDays, Calculator } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../../../components/ui/card';
 import { Input } from '../../../components/ui/input';
 import { Button } from '../../../components/ui/button';
 import WarehouseLayout from '../../../components/warehouse/WarehouseLayout';
-import { API_BASE } from '../../../contexts/WarehouseAuthContext';
+import { useWarehouseAuth, API_BASE } from '../../../contexts/WarehouseAuthContext';
 
 type FeeConfig = {
-  dailyStorageRate: number;
-  overdueStorageRate: number;
-  freeStorageDays: number;
+  currency?: string;
+  costRate?: number;
+  ratePerKgDefault?: number;
+  ratePerKgByCargoType?: Record<string, number>;
+  freeStorageDays?: number;
+  overduePenaltyRate?: number;
+  coldStorageSurcharge?: number;
+  hazmatSurcharge?: number;
+  liftingFeePerMove?: number;
+  storageMultiplier?: number;
+  weightMultiplier?: number;
+  containerRate20ft?: number;
+  containerRate40ft?: number;
+  earlyPickupFee?: number;
 };
 
+type CargoType = { cargoTypeId: number; cargoTypeName: string };
+
 export default function Payments() {
-  const [feeConfig, setFeeConfig] = useState<FeeConfig | null>(null);
-  const [startDate, setStartDate] = useState('');
-  const [endDate, setEndDate]     = useState('');
-  const [result, setResult]       = useState<string | null>(null);
+  const { accessToken } = useWarehouseAuth();
+  const headers = useMemo(() => ({
+    'Content-Type': 'application/json',
+    ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+  }), [accessToken]);
+
+  const [feeConfig, setFeeConfig]   = useState<FeeConfig | null>(null);
+  const [cargoTypes, setCargoTypes] = useState<CargoType[]>([]);
+
+  // Form inputs
+  const [startDate,      setStartDate]      = useState('');
+  const [endDate,        setEndDate]        = useState('');
+  const [weight,         setWeight]         = useState('');
+  const [cargoTypeName,  setCargoTypeName]  = useState('');
+  const [containerSize,  setContainerSize]  = useState<'' | '20ft' | '40ft'>('');
+
+  const [result, setResult] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch(`${API_BASE}/public/fee-config`)
-      .then((r) => r.json())
-      .then((d) => { if (d.data) setFeeConfig(d.data); })
-      .catch(() => {});
+    const fetchAll = async () => {
+      try {
+        const [feeRes, ctRes] = await Promise.all([
+          fetch(`${API_BASE}/admin/fees`, { headers }),
+          fetch(`${API_BASE}/admin/cargo-types`, { headers }),
+        ]);
+        const feeData = await feeRes.json();
+        const ctData  = await ctRes.json();
+        if (feeRes.ok) setFeeConfig(feeData.data);
+        if (ctRes.ok)  setCargoTypes(ctData.data || []);
+      } catch { /* ignore */ }
+    };
+    fetchAll();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleLookup = () => {
@@ -33,34 +69,67 @@ export default function Payments() {
     const totalDays = Math.max(1, Math.round(
       (new Date(endDate).getTime() - new Date(startDate).getTime()) / (1000 * 60 * 60 * 24),
     ));
-    if (feeConfig) {
-      const freeDays  = Math.min(totalDays, feeConfig.freeStorageDays);
-      const billDays  = Math.max(0, totalDays - feeConfig.freeStorageDays);
-      const fee       = billDays * feeConfig.dailyStorageRate;
-      setResult(
-        `${totalDays} ngày lưu kho · ${freeDays} ngày miễn phí · ${billDays} ngày tính phí × $${feeConfig.dailyStorageRate}/ngày = $${fee.toFixed(2)}`,
-      );
-    } else {
-      setResult(`Thời gian lưu kho: ${totalDays} ngày. Vui lòng liên hệ để biết chi phí cụ thể.`);
-    }
-  };
 
-  const rateTable = feeConfig
-    ? [
-        { label: 'Miễn phí lưu trữ', value: `${feeConfig.freeStorageDays} ngày đầu` },
-        { label: 'Phí lưu trữ hàng ngày', value: `$${feeConfig.dailyStorageRate}/ngày` },
-        { label: 'Phí lưu trữ quá hạn', value: `$${feeConfig.overdueStorageRate}/ngày` },
-      ]
-    : null;
+    const kg = parseFloat(weight) || 0;
+    const cfg = feeConfig;
+
+    if (!cfg) {
+      setResult(`Thời gian lưu kho: ${totalDays} ngày. Vui lòng liên hệ để biết chi phí.`);
+      return;
+    }
+
+    const freeDays        = cfg.freeStorageDays   ?? 3;
+    const billDays        = Math.max(0, totalDays - freeDays);
+    const currency        = cfg.currency           || 'VND';
+    const storageMult     = cfg.storageMultiplier  ?? 1;
+    const weightMult      = cfg.weightMultiplier   ?? 1;
+    const fmt = (n: number) => n.toLocaleString('vi-VN');
+
+    // Determine base price
+    let basePrice = 0;
+    let basePriceDesc = '';
+
+    if (containerSize === '20ft' && (cfg.containerRate20ft ?? 0) > 0) {
+      basePrice     = cfg.containerRate20ft!;
+      basePriceDesc = `Container 20ft: ${fmt(basePrice)} ${currency}`;
+    } else if (containerSize === '40ft' && (cfg.containerRate40ft ?? 0) > 0) {
+      basePrice     = cfg.containerRate40ft!;
+      basePriceDesc = `Container 40ft: ${fmt(basePrice)} ${currency}`;
+    } else if (kg > 0) {
+      // Weight-based: base = ratePerKg × kg
+      let ratePerKg = cfg.ratePerKgDefault ?? 0;
+      if (cargoTypeName && cfg.ratePerKgByCargoType) {
+        const specific = cfg.ratePerKgByCargoType[cargoTypeName];
+        if (specific != null) ratePerKg = specific;
+      }
+      basePrice     = ratePerKg * kg;
+      basePriceDesc = `${fmt(kg)} kg × ${fmt(ratePerKg)} ${currency}/kg = ${fmt(basePrice)} ${currency}`;
+    }
+
+    // Formula: price = base_price × number_of_days × storage_multiplier × weight_multiplier
+    const storageFee = basePrice * billDays * storageMult * weightMult;
+
+    const lines: string[] = [];
+    lines.push(`Thời gian: ${totalDays} ngày · Miễn phí: ${freeDays} ngày · Tính phí: ${billDays} ngày`);
+    if (basePriceDesc) lines.push(`Giá cơ sở: ${basePriceDesc}`);
+    if (billDays > 0 && basePrice > 0) {
+      lines.push(`Công thức: ${fmt(basePrice)} × ${billDays} ngày × ${storageMult} × ${weightMult} = ${fmt(storageFee)} ${currency}`);
+    }
+
+    lines.push(`─────────────────`);
+    lines.push(`Tổng ước tính: ${fmt(storageFee)} ${currency}`);
+
+    if (basePrice === 0) lines.push('(Chọn loại container hoặc nhập trọng lượng để tính phí)');
+
+    setResult(lines.join('\n'));
+  };
 
   return (
     <WarehouseLayout>
       <div className="space-y-6">
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-          <div>
-            <h1 className="page-title">Tra cứu & tiện ích</h1>
-            <p className="page-subtitle">Tra cứu cước phí theo ngày nhập, ngày xuất.</p>
-          </div>
+        <div>
+          <h1 className="page-title">Tra cứu & tiện ích</h1>
+          <p className="page-subtitle">Tính toán chi phí lưu kho theo trọng lượng và loại hàng.</p>
         </div>
 
         <div className="grid gap-6 xl:grid-cols-[1.3fr_0.9fr]">
@@ -68,83 +137,162 @@ export default function Payments() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <CalendarDays className="w-5 h-5" />
-                Tra cứu cước phí
+                Tra cứu cước phí lưu kho
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-6">
+            <CardContent className="space-y-5">
               <div className="grid gap-4 sm:grid-cols-2">
                 <div>
-                  <label className="form-label">Ngày nhập</label>
+                  <label className="block text-sm font-medium mb-1 text-gray-700">Ngày nhập kho</label>
                   <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="h-12" />
                 </div>
                 <div>
-                  <label className="form-label">Ngày xuất</label>
+                  <label className="block text-sm font-medium mb-1 text-gray-700">Ngày xuất kho</label>
                   <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="h-12" />
                 </div>
               </div>
 
-              <Button className="w-full bg-blue-600 hover:bg-blue-700" onClick={handleLookup}>
-                Tra cứu
-              </Button>
-
-              <div className="rounded-3xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-4">
-                <div className="text-sm text-gray-500 dark:text-gray-400">Kết quả ước tính cước phí</div>
-                <div className="mt-3 min-h-[52px] text-base font-semibold text-gray-900 dark:text-white">
-                  {result || 'Nhấn Tra cứu để hiển thị số tiền.'}
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <label className="block text-sm font-medium mb-1 text-gray-700">Loại container</label>
+                  <select
+                    value={containerSize}
+                    onChange={(e) => setContainerSize(e.target.value as '' | '20ft' | '40ft')}
+                    className="h-12 w-full border border-gray-300 rounded-md px-3 text-sm bg-white dark:bg-gray-800"
+                  >
+                    <option value="">-- Không chọn (tính theo kg) --</option>
+                    <option value="20ft">20ft</option>
+                    <option value="40ft">40ft</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1 text-gray-700">Loại hàng hóa</label>
+                  <select
+                    value={cargoTypeName}
+                    onChange={(e) => setCargoTypeName(e.target.value)}
+                    className="h-12 w-full border border-gray-300 rounded-md px-3 text-sm bg-white dark:bg-gray-800"
+                  >
+                    <option value="">-- Mặc định --</option>
+                    {cargoTypes.map((ct) => (
+                      <option key={ct.cargoTypeId} value={ct.cargoTypeName}>{ct.cargoTypeName}</option>
+                    ))}
+                  </select>
                 </div>
               </div>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <label className="block text-sm font-medium mb-1 text-gray-700">Trọng lượng (kg)</label>
+                  <Input
+                    type="number"
+                    value={weight}
+                    onChange={(e) => setWeight(e.target.value)}
+                    placeholder="VD: 18500"
+                    min={0}
+                    className="h-12"
+                    disabled={!!containerSize}
+                  />
+                  {containerSize && <p className="text-xs text-gray-400 mt-1">Tắt khi chọn loại container</p>}
+                </div>
+              </div>
+
+              <Button className="w-full bg-blue-600 hover:bg-blue-700 text-white" onClick={handleLookup}>
+                <Calculator className="w-4 h-4 mr-2" />
+                Tính chi phí
+              </Button>
+
+              <div className="rounded-2xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 p-4">
+                <div className="text-sm text-gray-500 dark:text-gray-400 mb-2">Kết quả ước tính</div>
+                <div className="min-h-[60px] text-sm font-medium text-gray-900 dark:text-white whitespace-pre-line">
+                  {result || 'Điền thông tin và nhấn "Tính chi phí".'}
+                </div>
+              </div>
+
+              <p className="text-xs text-gray-400">* Kết quả chỉ mang tính chất tham khảo. Chi phí thực tế có thể thay đổi theo hợp đồng.</p>
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <DollarSign className="w-5 h-5" />
-                Biểu cước kho
+                <Calculator className="w-5 h-5" />
+                Thông số phí hiện tại
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4">
-              {!rateTable ? (
-                <div className="text-sm text-gray-400 text-center py-6">Đang tải biểu cước...</div>
+            <CardContent className="space-y-3 text-sm">
+              {!feeConfig ? (
+                <div className="text-gray-400 text-center py-6">Đang tải...</div>
               ) : (
-                rateTable.map((item) => (
-                  <div key={item.label} className="rounded-3xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-4">
-                    <div className="flex items-center justify-between gap-3">
-                      <div>
-                        <p className="font-semibold text-gray-900 dark:text-white">{item.label}</p>
-                      </div>
-                      <div className="text-base font-semibold text-gray-900 dark:text-white">{item.value}</div>
-                    </div>
+                <>
+                  <div className="flex justify-between py-2 border-b border-gray-100">
+                    <span className="text-gray-500">Đơn vị tiền tệ</span>
+                    <span className="font-semibold">{feeConfig.currency || '—'}</span>
                   </div>
-                ))
+                  <div className="flex justify-between py-2 border-b border-gray-100">
+                    <span className="text-gray-500">Miễn phí lưu kho</span>
+                    <span className="font-semibold">{feeConfig.freeStorageDays ?? '—'} ngày</span>
+                  </div>
+                  <div className="flex justify-between py-2 border-b border-gray-100">
+                    <span className="text-gray-500">Phí/kg mặc định</span>
+                    <span className="font-semibold">{feeConfig.ratePerKgDefault != null ? feeConfig.ratePerKgDefault.toLocaleString('vi-VN') : '—'} {feeConfig.currency}</span>
+                  </div>
+                  {feeConfig.overduePenaltyRate != null && (
+                    <div className="flex justify-between py-2 border-b border-gray-100">
+                      <span className="text-gray-500">Tỉ lệ phạt quá hạn</span>
+                      <span className="font-semibold">{(feeConfig.overduePenaltyRate * 100).toFixed(2)}%/ngày</span>
+                    </div>
+                  )}
+                  {feeConfig.liftingFeePerMove != null && feeConfig.liftingFeePerMove > 0 && (
+                    <div className="flex justify-between py-2 border-b border-gray-100">
+                      <span className="text-gray-500">Phí nâng/hạ</span>
+                      <span className="font-semibold">{feeConfig.liftingFeePerMove.toLocaleString('vi-VN')} {feeConfig.currency}/lần</span>
+                    </div>
+                  )}
+                  {feeConfig.storageMultiplier != null && (
+                    <div className="flex justify-between py-2 border-b border-gray-100">
+                      <span className="text-gray-500">Hệ số lưu kho</span>
+                      <span className="font-semibold">× {feeConfig.storageMultiplier}</span>
+                    </div>
+                  )}
+                  {feeConfig.weightMultiplier != null && (
+                    <div className="flex justify-between py-2 border-b border-gray-100">
+                      <span className="text-gray-500">Hệ số trọng lượng</span>
+                      <span className="font-semibold">× {feeConfig.weightMultiplier}</span>
+                    </div>
+                  )}
+                  {feeConfig.containerRate20ft != null && feeConfig.containerRate20ft > 0 && (
+                    <div className="flex justify-between py-2 border-b border-gray-100">
+                      <span className="text-gray-500">Giá container 20ft</span>
+                      <span className="font-semibold">{feeConfig.containerRate20ft.toLocaleString('vi-VN')} {feeConfig.currency}</span>
+                    </div>
+                  )}
+                  {feeConfig.containerRate40ft != null && feeConfig.containerRate40ft > 0 && (
+                    <div className="flex justify-between py-2 border-b border-gray-100">
+                      <span className="text-gray-500">Giá container 40ft</span>
+                      <span className="font-semibold">{feeConfig.containerRate40ft.toLocaleString('vi-VN')} {feeConfig.currency}</span>
+                    </div>
+                  )}
+                  {feeConfig.earlyPickupFee != null && feeConfig.earlyPickupFee > 0 && (
+                    <div className="flex justify-between py-2 border-b border-gray-100">
+                      <span className="text-gray-500">Phí xuất sớm</span>
+                      <span className="font-semibold">{feeConfig.earlyPickupFee.toLocaleString('vi-VN')} {feeConfig.currency}</span>
+                    </div>
+                  )}
+                  {feeConfig.ratePerKgByCargoType && Object.keys(feeConfig.ratePerKgByCargoType).length > 0 && (
+                    <>
+                      <div className="text-xs text-gray-400 pt-2">Phí theo loại hàng:</div>
+                      {Object.entries(feeConfig.ratePerKgByCargoType).map(([type, rate]) => (
+                        <div key={type} className="flex justify-between py-1 pl-2">
+                          <span className="text-gray-500">{type}</span>
+                          <span className="font-semibold">{rate.toLocaleString('vi-VN')} {feeConfig.currency}/kg</span>
+                        </div>
+                      ))}
+                    </>
+                  )}
+                </>
               )}
             </CardContent>
           </Card>
         </div>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Tiện ích nhanh</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid gap-4 md:grid-cols-3">
-              <div className="rounded-3xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-4">
-                <div className="text-sm font-semibold text-gray-900 dark:text-white">Tra cứu cước phí</div>
-                <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">Nhập ngày nhập, ngày xuất để biết chi phí lưu kho.</p>
-              </div>
-              <div className="rounded-3xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-4">
-                <div className="text-sm font-semibold text-gray-900 dark:text-white">Miễn phí lưu trữ</div>
-                <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
-                  {feeConfig ? `${feeConfig.freeStorageDays} ngày đầu miễn phí kể từ ngày nhập kho.` : 'Xem bảng biểu cước bên trên.'}
-                </p>
-              </div>
-              <div className="rounded-3xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-4">
-                <div className="text-sm font-semibold text-gray-900 dark:text-white">Liên hệ hỗ trợ</div>
-                <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">Để được báo giá chính xác, vui lòng liên hệ bộ phận vận hành.</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
       </div>
     </WarehouseLayout>
   );

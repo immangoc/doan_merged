@@ -243,7 +243,7 @@ export default function WarehouseLayout({ children }: WarehouseLayoutProps) {
           >
             {/* Logo with Close Button */}
             <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
-              <HungThuyLogo size="md" showText={true} />
+              <Link to="/"><HungThuyLogo size="md" showText={true} /></Link>
               <button
                 onClick={() => setSidebarOpen(false)}
                 className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors lg:hidden"

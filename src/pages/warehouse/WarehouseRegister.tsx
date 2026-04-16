@@ -1,19 +1,24 @@
 import { useState } from 'react';
 import { motion } from 'motion/react';
 import { useNavigate, Link } from 'react-router';
-import { Mail, Lock, Eye, EyeOff, User, Building, Phone, UserPlus, CheckCircle, ArrowLeft } from 'lucide-react';
+import { Mail, Lock, Eye, EyeOff, User, Building, Phone, UserPlus, CheckCircle, ArrowLeft, KeyRound } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
 import { Label } from '../../components/ui/label';
 import HungThuyLogo from '../../components/warehouse/HungThuyLogo';
 import { ImageWithFallback } from '../../components/figma/ImageWithFallback';
-import { useWarehouseAuth } from '../../contexts/WarehouseAuthContext';
+import { useWarehouseAuth, API_BASE } from '../../contexts/WarehouseAuthContext';
+
+// step: 'form' → 'otp' → 'done'
+type Step = 'form' | 'otp' | 'done';
 
 export default function WarehouseRegister() {
+  const [step, setStep] = useState<Step>('form');
   const [formData, setFormData] = useState({
     email: '', password: '', confirmPassword: '', name: '', company: '', phone: '',
   });
+  const [otp, setOtp] = useState('');
   const [showPassword,        setShowPassword]        = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -26,18 +31,52 @@ export default function WarehouseRegister() {
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) =>
     setFormData({ ...formData, [e.target.name]: e.target.value });
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  // Step 1: validate form and send OTP
+  const handleSendOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     if (formData.password !== formData.confirmPassword) { setError('Mật khẩu xác nhận không khớp'); return; }
     if (formData.password.length < 6) { setError('Mật khẩu phải có ít nhất 6 ký tự'); return; }
     setLoading(true);
     try {
+      const res = await fetch(`${API_BASE}/auth/send-registration-otp`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: formData.email }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'Không thể gửi OTP');
+      setStep('otp');
+    } catch (err: any) {
+      setError(err.message || 'Gửi OTP thất bại. Vui lòng thử lại.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Step 2: verify OTP then complete registration
+  const handleVerifyAndRegister = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    if (!otp.trim()) { setError('Vui lòng nhập mã OTP'); return; }
+    setLoading(true);
+    try {
+      // Verify OTP
+      const verifyRes = await fetch(`${API_BASE}/auth/verify-registration-otp`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: formData.email, otp: otp.trim() }),
+      });
+      const verifyData = await verifyRes.json();
+      if (!verifyRes.ok) throw new Error(verifyData.message || 'Mã OTP không đúng');
+
+      // Register
       await signup({
         email: formData.email, password: formData.password,
         name: formData.name, company: formData.company, phone: formData.phone,
       });
       setSuccess(true);
+      setStep('done');
       setTimeout(() => navigate('/warehouse/login'), 2500);
     } catch (err: any) {
       setError(err.message || 'Đăng ký thất bại. Vui lòng thử lại.');
@@ -45,6 +84,8 @@ export default function WarehouseRegister() {
       setLoading(false);
     }
   };
+
+  const handleSubmit = step === 'otp' ? handleVerifyAndRegister : handleSendOtp;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-950 to-slate-900 flex items-center justify-center p-4">
@@ -98,7 +139,7 @@ export default function WarehouseRegister() {
               <p className="text-xs text-center text-gray-400 mt-1">Đăng ký để truy cập hệ thống quản lý</p>
             </CardHeader>
             <CardContent className="px-6 pb-6">
-              {success ? (
+              {step === 'done' ? (
                 <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }}
                   className="text-center py-10 space-y-4">
                   <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto">
@@ -109,8 +150,44 @@ export default function WarehouseRegister() {
                     <p className="text-gray-500 text-sm">Tài khoản đã được tạo. Đang chuyển về trang đăng nhập...</p>
                   </div>
                 </motion.div>
+              ) : step === 'otp' ? (
+                <form onSubmit={handleVerifyAndRegister} className="space-y-4">
+                  <div className="text-center py-3">
+                    <div className="w-14 h-14 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                      <KeyRound className="w-7 h-7 text-blue-600" />
+                    </div>
+                    <p className="text-sm text-gray-600 dark:text-gray-300">
+                      Mã xác thực đã được gửi tới <strong>{formData.email}</strong>.
+                      Vui lòng kiểm tra hộp thư và nhập mã bên dưới.
+                    </p>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="otp" className="text-sm font-medium">Mã OTP <span className="text-red-500">*</span></Label>
+                    <Input
+                      id="otp" type="text" maxLength={6} placeholder="Nhập 6 chữ số"
+                      value={otp} onChange={(e) => setOtp(e.target.value)}
+                      className="h-11 text-center text-lg tracking-widest font-mono" required
+                    />
+                  </div>
+                  {error && (
+                    <motion.div initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }}
+                      className="bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 px-3 py-2.5 rounded-lg text-sm border border-red-200">
+                      {error}
+                    </motion.div>
+                  )}
+                  <Button type="submit" disabled={loading}
+                    className="w-full h-11 bg-gradient-to-r from-blue-800 to-blue-600 hover:from-blue-700 hover:to-blue-500 text-white font-semibold shadow-md">
+                    {loading
+                      ? <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" /> Đang xác thực...</>
+                      : <><CheckCircle className="w-4 h-4 mr-2" /> Xác nhận & Hoàn tất đăng ký</>}
+                  </Button>
+                  <button type="button" onClick={() => { setStep('form'); setError(''); setOtp(''); }}
+                    className="w-full text-sm text-gray-500 hover:text-gray-700 underline">
+                    ← Quay lại nhập thông tin
+                  </button>
+                </form>
               ) : (
-                <form onSubmit={handleSubmit} className="space-y-4">
+                <form onSubmit={handleSendOtp} className="space-y-4">
                   <div className="space-y-1.5">
                     <Label htmlFor="name" className="text-sm font-medium">Họ và tên <span className="text-red-500">*</span></Label>
                     <div className="relative">
@@ -191,8 +268,8 @@ export default function WarehouseRegister() {
                   <Button type="submit" disabled={loading}
                     className="w-full h-11 bg-gradient-to-r from-blue-800 to-blue-600 hover:from-blue-700 hover:to-blue-500 text-white font-semibold shadow-md">
                     {loading
-                      ? <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" /> Đang đăng ký...</>
-                      : <><UserPlus className="w-4 h-4 mr-2" /> Đăng ký tài khoản</>}
+                      ? <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" /> Đang gửi OTP...</>
+                      : <><UserPlus className="w-4 h-4 mr-2" /> Tiếp tục — Gửi mã xác thực</>}
                   </Button>
 
                   <p className="text-center text-sm text-gray-500">
