@@ -4,12 +4,12 @@ import { ImageWithFallback } from '../components/figma/ImageWithFallback';
 import MainLayout from '../components/MainLayout';
 
 const milestones = [
-  { year: '2004', title: 'Thành lập công ty', desc: 'Công ty Vận tải Cảng biển Hùng Thủy được thành lập tại Cảng Cát Lái, TP. Hồ Chí Minh với 50 nhân viên.' },
-  { year: '2008', title: 'Mở rộng dịch vụ', desc: 'Mở rộng sang dịch vụ logistics tích hợp và kho bãi container. Đạt 200+ khách hàng đối tác.' },
-  { year: '2012', title: 'Chứng nhận ISO', desc: 'Đạt chứng nhận ISO 9001:2008 về hệ thống quản lý chất lượng. Mở văn phòng đại diện tại Hà Nội và Đà Nẵng.' },
-  { year: '2016', title: 'Số hóa vận hành', desc: 'Triển khai hệ thống quản lý container thông minh, tích hợp công nghệ số hóa vào mọi quy trình.' },
-  { year: '2020', title: 'Vươn ra quốc tế', desc: 'Thiết lập quan hệ đối tác với các hãng tàu quốc tế hàng đầu. Tuyến vận chuyển phủ 35 quốc gia.' },
-  { year: '2025', title: 'Dẫn đầu thị trường', desc: 'Trở thành một trong 5 công ty logistics cảng biển hàng đầu Việt Nam. Quản lý 5000+ container mỗi năm.' },
+  { year: '2010', title: 'Khởi đầu hành trình', desc: 'Hùng Thủy bắt đầu cung cấp dịch vụ quản lý kho bãi container và tiếp nhận hàng container tại Hải Phòng.' },
+  { year: '2014', title: 'Nâng cấp bãi depot', desc: 'Mở rộng diện tích kho bãi tại Đình Vũ, tăng cường năng lực lưu trữ và xử lý container rỗng.' },
+  { year: '2018', title: 'Tăng cường liên kết cảng', desc: 'Mở rộng quan hệ với các cảng cửa ngõ và nâng cao năng lực kết nối nội địa với xuất nhập khẩu.' },
+  { year: '2021', title: 'Chuyển đổi số', desc: 'Triển khai hệ thống quản lý container thông minh, chú trọng theo dõi thời gian thực và báo cáo hiệu suất.' },
+  { year: '2024', title: 'Mở rộng dịch vụ kho bãi', desc: 'Tăng mạnh khả năng tiếp nhận, kiểm soát chất lượng và bảo dưỡng container theo tiêu chuẩn IICL.' },
+  { year: '2026', title: 'Định hướng phát triển', desc: 'Khẳng định vị thế trung tâm logistics miền Bắc với giải pháp quản lý kho bãi container an toàn và hiệu quả.' },
 ];
 
 const values = [
@@ -19,10 +19,9 @@ const values = [
 ];
 
 const team = [
-  { name: 'Nguyễn Hùng Thủy', title: 'Tổng Giám đốc', exp: '25 năm kinh nghiệm logistics' },
-  { name: 'Trần Minh Phúc', title: 'Giám đốc Vận hành', exp: '18 năm kinh nghiệm cảng biển' },
-  { name: 'Lê Thị Hương', title: 'Giám đốc Kinh doanh', exp: '15 năm kinh nghiệm thương mại quốc tế' },
-  { name: 'Phạm Quốc Bảo', title: 'Giám đốc Công nghệ', exp: '12 năm kinh nghiệm IT logistics' },
+  { name: 'Nguyễn Xuân Khải', title: 'Giám đốc', exp: 'Định hướng chiến lược và phát triển kinh doanh' },
+  { name: 'Nguyễn Xuân Hùng', title: 'Điều phối', exp: 'Chuyên gia quản lý vận chuyển và kho bãi' },
+  { name: 'Nguyễn Thị Thúy', title: 'Quản lý kho', exp: 'Điều hành hoạt động kho bãi và kiểm soát chất lượng' },
 ];
 
 const certifications = [
@@ -61,7 +60,7 @@ export default function AboutPage() {
               <span className="text-blue-300">Hùng Thủy</span>
             </h1>
             <p className="text-blue-100 text-xl max-w-3xl mx-auto leading-relaxed">
-              Hơn 20 năm xây dựng và phát triển, Hùng Thủy tự hào là đối tác logistics đáng tin cậy của hàng trăm doanh nghiệp tại Việt Nam và quốc tế.
+              Hơn 15 năm xây dựng và phát triển, Hùng Thủy tự hào là đối tác logistics đáng tin cậy của hàng trăm doanh nghiệp tại Việt Nam và quốc tế.
             </p>
           </motion.div>
         </div>
@@ -77,21 +76,17 @@ export default function AboutPage() {
               viewport={{ once: true }}
             >
               <h2 className="text-4xl font-bold text-gray-900 mb-6">
-                Đối tác logistics hàng đầu Việt Nam
+                Đối tác hàng đầu Việt Nam
               </h2>
-              <p className="text-gray-600 leading-relaxed mb-6">
-                Công ty Vận tải Cảng biển Hùng Thủy được thành lập năm 2004 tại Cảng Cát Lái, Quận 2, TP. Hồ Chí Minh. Trải qua hơn 20 năm hoạt động và phát triển, chúng tôi đã trở thành một trong những công ty logistics và vận tải biển hàng đầu tại Việt Nam.
-              </p>
               <p className="text-gray-600 leading-relaxed mb-8">
-                Với đội ngũ hơn 500 chuyên gia giàu kinh nghiệm và hệ thống cơ sở vật chất hiện đại, Hùng Thủy cung cấp đầy đủ các dịch vụ từ quản lý kho bãi container, vận tải biển nội địa và quốc tế, logistics tích hợp đến hỗ trợ thủ tục hải quan.
+                Công ty Vận tải Cảng biển Hùng Thủy được thành lập và vận hành trong bối cảnh hạ tầng logistics tại Hải Phòng đang có sự chuyển dịch mạnh mẽ về phía hạ lưu sông Cấm và khu vực Đình Vũ. Với vị thế là một mắt xích trung chuyển trong chuỗi cung ứng, hoạt động cốt lõi của công ty tập trung vào việc quản trị dòng dịch chuyển của container rỗng và container hàng cho các chủ tàu lớn. Đặc thù bãi (depot) của công ty là điểm kết nối giữa các khu công nghiệp tại Hải Dương, Bắc Ninh với các cảng cửa ngõ. Do đó, lưu lượng hàng hóa tại đây chịu ảnh hưởng trực tiếp bởi tính mùa vụ của thị trường xuất nhập khẩu và các biến động từ lịch trình cập cầu của các tàu mẹ. Sự phức tạp trong quản lý nảy sinh khi đối tượng điều khiển không chỉ là những khối thép vô tri mà còn là sự đan xen giữa các điều kiện kỹ thuật của vỏ container, thời hạn lưu bãi miễn phí và các yêu cầu khắt khe về vệ sinh, sửa chữa theo tiêu chuẩn quốc tế IICL.
               </p>
 
               <div className="space-y-3">
                 {[
-                  '5000+ container được quản lý mỗi năm',
+                  '1,000+ container được quản lý mỗi năm',
                   '200+ doanh nghiệp đối tác tin tưởng',
                   'Hoạt động 24/7, không có ngày nghỉ',
-                  'Phủ sóng 35 tuyến vận chuyển quốc tế',
                   'Đạt nhiều giải thưởng logistics uy tín',
                 ].map((item) => (
                   <div key={item} className="flex items-center gap-3">
@@ -117,7 +112,7 @@ export default function AboutPage() {
                   />
                 </div>
                 <div className="bg-blue-900 rounded-2xl p-5 text-white text-center">
-                  <div className="text-4xl font-bold mb-1">20+</div>
+                  <div className="text-4xl font-bold mb-1">15+</div>
                   <div className="text-blue-300 text-sm">Năm kinh nghiệm</div>
                 </div>
               </div>

@@ -25,11 +25,15 @@ import MyContainers from './pages/warehouse/role/MyContainers';
 import Orders from './pages/warehouse/role/Orders';
 import Payments from './pages/warehouse/role/Payments';
 
+// Yard 3D module (merged from 3d project)
+import YardApp from './yard3d/YardApp';
+
 // Public Pages
 import HomePage from './pages/HomePage';
 import AboutPage from './pages/AboutPage';
 import ContactPage from './pages/ContactPage';
 import NewsPage from './pages/NewsPage';
+import NewsDetailPage from './pages/NewsDetailPage';
 import ManagementSystemPage from './pages/ManagementSystemPage';
 
 export default function App() {
@@ -42,6 +46,7 @@ export default function App() {
           <Route path="/gioi-thieu" element={<AboutPage />} />
           <Route path="/lien-he" element={<ContactPage />} />
           <Route path="/tin-tuc" element={<NewsPage />} />
+          <Route path="/tin-tuc/:newsId" element={<NewsDetailPage />} />
           <Route path="/he-thong-quan-ly" element={<ManagementSystemPage />} />
 
           {/* Auth Routes */}
@@ -79,7 +84,7 @@ export default function App() {
             path="/warehouse/admin"
             element={
               <ProtectedRoute allowedRoles={['admin']}>
-                <AdminWarehouseManagementLayout headerTitle="ContainerMS">
+                <AdminWarehouseManagementLayout headerTitle="Hùng Thủy">
                   <Outlet />
                 </AdminWarehouseManagementLayout>
               </ProtectedRoute>
@@ -151,6 +156,16 @@ export default function App() {
             element={
               <ProtectedRoute allowedRoles={['customer']}>
                 <Payments />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Yard 3D — visualization & yard operations (admin, operator) */}
+          <Route
+            path="/yard/*"
+            element={
+              <ProtectedRoute allowedRoles={['admin', 'planner', 'operator']}>
+                <YardApp />
               </ProtectedRoute>
             }
           />

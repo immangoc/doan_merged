@@ -7,19 +7,19 @@ const contactInfo = [
   {
     icon: MapPin,
     title: 'Địa chỉ trụ sở',
-    lines: ['Khu Cảng Cát Lái, Phường Cát Lái', 'Quận 2, TP. Hồ Chí Minh', 'Việt Nam'],
+    lines: ['Số 26A Lê Thánh Tông', 'Phường Ngô Quyền, Hải Phòng', 'Việt Nam'],
     color: 'bg-blue-100 text-blue-700',
   },
   {
     icon: Phone,
     title: 'Điện thoại',
-    lines: ['Hotline: 1900 - 6868 - 68', 'VP: (+84) 28-3944-5678', 'Fax: (+84) 28-3944-5679'],
+    lines: ['Hotline: 02253768278', 'VP: 0904156269'],
     color: 'bg-green-100 text-green-700',
   },
   {
     icon: Mail,
     title: 'Email',
-    lines: ['info@hungthuy.com.vn', 'sales@hungthuy.com.vn', 'support@hungthuy.com.vn'],
+    lines: ['vantai.hungthuy@gmail.com'],
     color: 'bg-orange-100 text-orange-700',
   },
   {
@@ -245,14 +245,14 @@ export default function ContactPage() {
             >
               <div>
                 <h2 className="text-3xl font-bold text-gray-900 mb-2">Vị trí của chúng tôi</h2>
-                <p className="text-gray-600 mb-6">Tọa lạc tại Cảng Cát Lái, trung tâm logistics hàng đầu TP. Hồ Chí Minh.</p>
+                <p className="text-gray-600 mb-6">Tọa lạc tại Hải Phòng, trung tâm logistics cảng biển miền Bắc.</p>
               </div>
 
               {/* Map Embed */}
               <div className="rounded-2xl overflow-hidden shadow-xl border border-gray-100 h-80">
                 <iframe
                   title="Hùng Thủy Location"
-                  src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3919.3892!2d106.7528!3d10.7769!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x31752f1b7c3a7f67%3A0xa1efd6d4d2ad4c5!2sCat%20Lai%20Port!5e0!3m2!1sen!2s!4v1234567890"
+                  src="https://www.google.com/maps?q=S%E1%BB%91%2026A%20L%C3%AA%20Th%C3%A1nh%20T%C3%B4ng%2C%20Ph%C6%B0%E1%BB%9Dng%20Ng%C3%B4%20Quy%E1%BB%87n%2C%20H%E1%BA%A3i%20Ph%C3%B2ng%2C%20Vi%E1%BB%87t%20Nam&output=embed"
                   width="100%"
                   height="100%"
                   style={{ border: 0 }}
@@ -274,13 +274,17 @@ export default function ContactPage() {
                   </div>
                 </div>
                 <div className="space-y-3">
-                  <a href="tel:19006868" className="flex items-center gap-3 bg-white/10 hover:bg-white/20 transition-colors rounded-xl px-4 py-3">
+                  <a href="tel:02253768278" className="flex items-center gap-3 bg-white/10 hover:bg-white/20 transition-colors rounded-xl px-4 py-3">
                     <Phone className="w-5 h-5 text-blue-300" />
-                    <span className="font-semibold">1900 - 6868 - 68</span>
+                    <span className="font-semibold">02253768278</span>
                   </a>
-                  <a href="mailto:info@hungthuy.com.vn" className="flex items-center gap-3 bg-white/10 hover:bg-white/20 transition-colors rounded-xl px-4 py-3">
+                  <a href="tel:0904156269" className="flex items-center gap-3 bg-white/10 hover:bg-white/20 transition-colors rounded-xl px-4 py-3">
+                    <Phone className="w-5 h-5 text-blue-300" />
+                    <span className="font-semibold">0904156269</span>
+                  </a>
+                  <a href="mailto:vantai.hungthuy@gmail.com" className="flex items-center gap-3 bg-white/10 hover:bg-white/20 transition-colors rounded-xl px-4 py-3">
                     <Mail className="w-5 h-5 text-blue-300" />
-                    <span className="font-semibold">info@hungthuy.com.vn</span>
+                    <span className="font-semibold">vantai.hungthuy@gmail.com</span>
                   </a>
                 </div>
               </div>

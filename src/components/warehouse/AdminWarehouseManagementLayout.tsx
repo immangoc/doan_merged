@@ -126,7 +126,7 @@ export default function AdminWarehouseManagementLayout(
       { id: 'hangtau', label: 'Hãng Tàu', to: '/warehouse/admin/section/quan-ly-hang-tau', icon: IconShip },
       { id: 'lichTrinh', label: 'Lịch Trình', to: '/warehouse/admin/section/quan-ly-lich', icon: IconCalendar },
       { id: 'cuocphi', label: 'Cước Phí', to: '/warehouse/admin/section/quan-ly-cuoc-phi-bieu-cuoc', icon: IconDollar },
-      { id: 'quanlykho', label: 'Quản lý kho', to: '/tong-quan', icon: IconWarehouse },
+      { id: 'quanlykho', label: 'Quản lý kho', to: '/yard/tong-quan', icon: IconWarehouse },
       { id: 'quantritaikhoan', label: 'Quản trị hệ thống', to: '/warehouse/admin/section/quan-tri-he-thong', icon: IconUsers },
       { id: 'taikhoan', label: 'Tài khoản Admin', to: '/warehouse/admin/section/quan-ly-tai-khoan', icon: IconUser },
     ],
@@ -174,14 +174,28 @@ export default function AdminWarehouseManagementLayout(
   return (
     <div className="wm-shell">
       <aside id="sidebar">
-        <div className="sidebar-logo">
-          <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
-            <rect width="28" height="28" rx="8" fill="#6c47ff" />
-            <rect x="6" y="8" width="16" height="3" rx="1.5" fill="white" />
-            <rect x="6" y="13" width="16" height="3" rx="1.5" fill="white" opacity=".7" />
-            <rect x="6" y="18" width="10" height="3" rx="1.5" fill="white" opacity=".4" />
-          </svg>
-          ContainerMS
+        <div className="sidebar-logo" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <div
+            style={{
+              width: '40px',
+              height: '40px',
+              backgroundColor: '#fff',
+              borderRadius: '10px',
+              boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)',
+              padding: '6px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              overflow: 'hidden',
+              flexShrink: 0
+            }}
+          >
+            <img src="/logo-new.svg" alt="Hùng Thủy logo" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column' }}>
+            <span style={{ fontSize: '18px', fontWeight: 'bold', color: 'var(--text-main, #333)', lineHeight: '1.2' }}>Hùng Thủy</span>
+            <span style={{ fontSize: '12px', fontWeight: '500', color: 'var(--text-muted, #666)' }}>Port Logistics</span>
+          </div>
         </div>
 
         <div className="sidebar-section">Tổng quan</div>
@@ -193,29 +207,13 @@ export default function AdminWarehouseManagementLayout(
         ))}
 
         <div className="sidebar-section">Quản lý</div>
-        {navItems.slice(2, 9).map((item) =>
-          item.id === 'quanlykho' ? (
-            <button
-              key={item.id}
-              type="button"
-              className="nav-item"
-              onClick={() => {
-                const token = localStorage.getItem('ht_token');
-                const url = `http://localhost:5173/tong-quan${token ? `?token=${encodeURIComponent(token)}` : ''}`;
-                window.open(url, '_blank');
-              }}
-            >
-              {item.icon}
-              {item.label}
-            </button>
-          ) : (
+        {navItems.slice(2, 9).map((item) => (
             <Link key={item.id} to={item.to} className={`nav-item ${activeTo === item.to ? 'active' : ''}`}>
               {item.icon}
               {item.label}
               {item.badge ? <span className="nav-badge">{item.badge}</span> : null}
             </Link>
-          )
-        )}
+        ))}
 
         <div className="sidebar-section">Hệ thống</div>
         {navItems.slice(9).map((item) => (

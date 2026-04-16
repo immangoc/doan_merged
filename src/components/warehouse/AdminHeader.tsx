@@ -46,7 +46,7 @@ const CONTACTS = [
 
 export default function AdminHeader({ isDark, onThemeToggle }: { isDark: boolean; onThemeToggle: () => void }) {
   const location = useLocation();
-  const title = ROUTE_TITLES[location.pathname] || 'ContainerMS';
+  const title = ROUTE_TITLES[location.pathname] || 'Hùng Thủy';
   const [notifOpen, setNotifOpen] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
   const [notifFilter, setNotifFilter] = useState<'all' | 'unread'>('all');

@@ -56,7 +56,7 @@ export default function WarehouseLogin() {
         {/* ── LEFT: Branding ── */}
         <motion.div initial={{ opacity: 0, x: -40 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.55 }}
           className="hidden lg:flex flex-col gap-6 text-white">
-          <HungThuyLogo size="lg" showText />
+          <HungThuyLogo size="lg" showText variant="white" />
           <h1 className="text-4xl font-bold leading-tight">
             Hệ thống Quản lý<br />
             <span className="text-blue-400">Kho bãi Container</span>
@@ -66,7 +66,7 @@ export default function WarehouseLogin() {
             cảng biển theo chuẩn quốc tế với công nghệ hiện đại.
           </p>
           <div className="grid grid-cols-2 gap-3">
-            {[['5,000+','Container quản lý'],['99.9%','Độ chính xác'],['24/7','Vận hành liên tục'],['200+','Khách hàng tin dùng']].map(([v,l]) => (
+            {[['1,000+','Container quản lý'],['99.9%','Độ chính xác'],['24/7','Vận hành liên tục'],['200+','Khách hàng tin dùng']].map(([v,l]) => (
               <div key={l} className="bg-white/10 rounded-xl p-3 border border-white/10">
                 <div className="text-xl font-bold text-blue-300">{v}</div>
                 <div className="text-xs text-white/50">{l}</div>
@@ -94,7 +94,7 @@ export default function WarehouseLogin() {
 
             <CardHeader className="pt-6 pb-3 px-6">
               <div className="lg:hidden flex justify-center mb-3">
-                <HungThuyLogo size="md" showText />
+                <HungThuyLogo size="md" showText variant="white" />
               </div>
               <div className="flex items-center gap-2 justify-center">
                 <ShieldCheck className="w-5 h-5 text-blue-600" />

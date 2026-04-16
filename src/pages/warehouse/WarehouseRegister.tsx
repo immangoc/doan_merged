@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { motion } from 'motion/react';
 import { useNavigate, Link } from 'react-router';
-import { Mail, Lock, Eye, EyeOff, User, Building, Phone, UserPlus, CheckCircle } from 'lucide-react';
+import { Mail, Lock, Eye, EyeOff, User, Building, Phone, UserPlus, CheckCircle, ArrowLeft } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
@@ -48,12 +48,17 @@ export default function WarehouseRegister() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-950 to-slate-900 flex items-center justify-center p-4">
+      <div className="fixed top-4 left-4 z-20">
+        <Link to="/" className="flex items-center gap-2 text-sm text-white/80 hover:text-white bg-white/10 backdrop-blur-sm px-3 py-2 rounded-lg border border-white/20 transition-all hover:bg-white/20">
+          <ArrowLeft className="w-4 h-4" /> Quay lại trang chủ
+        </Link>
+      </div>
       <div className="w-full max-w-5xl grid grid-cols-1 lg:grid-cols-2 gap-10 items-center">
 
         {/* Left */}
         <motion.div initial={{ opacity: 0, x: -40 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.55 }}
           className="hidden lg:flex flex-col gap-6 text-white">
-          <HungThuyLogo size="lg" showText />
+          <HungThuyLogo size="lg" showText variant="white" />
           <h1 className="text-4xl font-bold leading-tight">
             Đăng ký tài khoản<br />
             <span className="text-blue-400">Quản lý Container</span>
@@ -88,7 +93,7 @@ export default function WarehouseRegister() {
           <Card className="shadow-2xl border-0 bg-white dark:bg-gray-900 overflow-hidden">
             <div className="h-1.5 bg-gradient-to-r from-blue-700 via-blue-400 to-cyan-400" />
             <CardHeader className="pt-6 pb-3 px-6">
-              <div className="lg:hidden flex justify-center mb-3"><HungThuyLogo size="md" showText /></div>
+              <div className="lg:hidden flex justify-center mb-3"><HungThuyLogo size="md" showText variant="white" /></div>
               <CardTitle className="text-xl font-bold text-center">Tạo tài khoản mới</CardTitle>
               <p className="text-xs text-center text-gray-400 mt-1">Đăng ký để truy cập hệ thống quản lý</p>
             </CardHeader>

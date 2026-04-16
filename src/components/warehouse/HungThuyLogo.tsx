@@ -4,9 +4,15 @@ interface HungThuyLogoProps {
   size?: 'sm' | 'md' | 'lg';
   showText?: boolean;
   variant?: 'default' | 'white';
+  imageSrc?: string;
 }
 
-export default function HungThuyLogo({ size = 'md', showText = true, variant = 'default' }: HungThuyLogoProps) {
+export default function HungThuyLogo({
+  size = 'md',
+  showText = true,
+  variant = 'default',
+  imageSrc,
+}: HungThuyLogoProps) {
   const sizes = {
     sm: { logo: 32, icon: 14, text: 'text-sm' },
     md: { logo: 40, icon: 18, text: 'text-base' },
@@ -28,31 +34,21 @@ export default function HungThuyLogo({ size = 'md', showText = true, variant = '
 
   const currentSize = sizes[size];
   const currentColor = colors[variant];
+  const logoSrc = imageSrc ?? '/logo-new.svg';
 
   return (
     <div className="flex items-center gap-3">
-      {/* Logo Icon */}
-      <div 
-        className={`relative ${currentColor.bg} rounded-xl shadow-lg p-2 flex items-center justify-center`}
+      <div
+        className={`relative rounded-xl shadow-lg overflow-hidden bg-white p-2 flex items-center justify-center`}
         style={{ width: currentSize.logo, height: currentSize.logo }}
       >
-        {/* Waves Background */}
-        <div className="absolute inset-0 flex items-end justify-center pb-1 opacity-30">
-          <Waves className="text-white" size={currentSize.icon * 1.2} />
-        </div>
-        
-        {/* Container Icon */}
-        <div className="absolute top-1 left-1/2 -translate-x-1/2">
-          <Container className="text-orange-400" size={currentSize.icon * 0.8} />
-        </div>
-        
-        {/* Anchor Icon */}
-        <div className="absolute bottom-1">
-          <Anchor className="text-white" size={currentSize.icon} />
-        </div>
+        <img
+          src={logoSrc}
+          alt="Hùng Thủy logo"
+          className="w-full h-full object-contain"
+        />
       </div>
 
-      {/* Company Name */}
       {showText && (
         <div className="flex flex-col">
           <div className={`font-bold ${currentSize.text} ${currentColor.text} leading-tight`}>

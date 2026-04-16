@@ -18,7 +18,7 @@ const navGroups = [
       { label: 'Hãng Tàu', to: '/warehouse/admin/section/quan-ly-hang-tau', icon: 'ship' },
       { label: 'Lịch Trình', to: '/warehouse/admin/section/quan-ly-lich', icon: 'calendar' },
       { label: 'Cước Phí', to: '/warehouse/admin/section/quan-ly-cuoc-phi-bieu-cuoc', icon: 'dollar' },
-      { label: 'Quản lý kho', to: '/tong-quan', icon: 'warehouse' },
+      { label: 'Quản lý kho', to: '/yard/tong-quan', icon: 'warehouse' },
     ],
   },
   {
@@ -130,14 +130,28 @@ export default function AdminSidebar() {
 
   return (
     <aside className="sidebar">
-      <NavLink to="/warehouse/admin/dashboard" className="sidebar-logo">
-        <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
-          <rect width="28" height="28" rx="8" fill="#6c47ff" />
-          <rect x="6" y="8" width="16" height="3" rx="1.5" fill="white" />
-          <rect x="6" y="13" width="16" height="3" rx="1.5" fill="white" opacity=".7" />
-          <rect x="6" y="18" width="10" height="3" rx="1.5" fill="white" opacity=".4" />
-        </svg>
-        ContainerMS
+      <NavLink to="/warehouse/admin/dashboard" className="sidebar-logo" style={{ display: 'flex', alignItems: 'center', gap: '12px', textDecoration: 'none' }}>
+        <div
+          style={{
+            width: '40px',
+            height: '40px',
+            backgroundColor: '#fff',
+            borderRadius: '10px',
+            boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)',
+            padding: '6px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            overflow: 'hidden',
+            flexShrink: 0
+          }}
+        >
+          <img src="/logo-new.svg" alt="Hùng Thủy logo" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column' }}>
+          <span style={{ fontSize: '18px', fontWeight: 'bold', color: 'var(--text-main, #333)', lineHeight: '1.2' }}>Hùng Thủy</span>
+          <span style={{ fontSize: '12px', fontWeight: '500', color: 'var(--text-muted, #666)' }}>Port Logistics</span>
+        </div>
       </NavLink>
 
       {navGroups.map((group) => (

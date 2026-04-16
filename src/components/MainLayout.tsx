@@ -268,17 +268,11 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
             <div className="lg:col-span-1">
-              <div className="flex items-center gap-2 mb-4">
-                <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center">
-                  <Ship className="w-6 h-6 text-blue-900" />
-                </div>
-                <div>
-                  <div className="font-bold text-white text-sm">HÙNG THỦY</div>
-                  <div className="text-blue-300 text-xs">Cảng biển & Logistics</div>
-                </div>
+              <div className="flex items-center gap-3 mb-4">
+                <HungThuyLogo size="md" showText variant="white" />
               </div>
               <p className="text-gray-400 text-sm leading-relaxed">
-                Công ty Vận tải Cảng biển Hùng Thủy - Đối tác logistics hàng đầu Việt Nam với hơn 20 năm kinh nghiệm trong ngành vận tải biển và quản lý kho bãi container.
+                Công ty Vận tải Cảng biển Hùng Thủy - Đối tác logistics hàng đầu Việt Nam với hơn 15 năm kinh nghiệm trong ngành vận tải biển và quản lý kho bãi container.
               </p>
             </div>
 
@@ -303,10 +297,10 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
             <div>
               <h4 className="font-semibold text-white mb-4">Liên hệ</h4>
               <ul className="space-y-2 text-sm text-gray-400">
-                <li>📍 Khu Cảng Cát Lái, Quận 2, TP. Hồ Chí Minh</li>
-                <li>📞 Hotline: 1900 - HUNG - THUY</li>
-                <li>📧 info@hungthuy.com.vn</li>
-                <li>🕐 Thứ 2 - Thứ 7: 7:00 - 18:00</li>
+                <li>📍 Số 26A Lê Thánh Tông, Phường Ngô Quyền, Hải Phòng</li>
+                <li>📞 Hotline: 02253768278</li>
+                <li>📞 VP: 0904156269</li>
+                <li>📧 vantai.hungthuy@gmail.com</li>
               </ul>
             </div>
           </div>
@@ -314,7 +308,7 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
         <div className="border-t border-gray-800">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex flex-col sm:flex-row items-center justify-between gap-2">
             <p className="text-gray-500 text-sm">© 2025 Công ty Vận tải Cảng biển Hùng Thủy. All rights reserved.</p>
-            <p className="text-gray-600 text-xs">Giấy phép kinh doanh số: 0312345678 - Cấp bởi Sở KHĐT TP.HCM</p>
+            <p className="text-gray-600 text-xs">Giấy phép kinh doanh số: 0312345678 - Cấp bởi Sở KHĐT Hải Phòng</p>
           </div>
         </div>
       </footer>

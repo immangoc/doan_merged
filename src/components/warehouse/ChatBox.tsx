@@ -33,7 +33,7 @@ function formatTime(iso: string) {
   return d.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
 }
 
-export default function ChatBox() {
+export default function ChatBox({ hideToggleButton }: { hideToggleButton?: boolean } = {}) {
   const { accessToken, user } = useWarehouseAuth();
 
   const headers = useMemo(() => ({
@@ -167,15 +167,24 @@ export default function ChatBox() {
 
   const currentUserId = (user as any)?.userId ?? (user as any)?.id;
 
+  // Custom DOM event listener for opening chat remotely
+  useEffect(() => {
+    const handler = () => setIsOpen((prev) => !prev);
+    window.addEventListener('ht-chat-toggle', handler);
+    return () => window.removeEventListener('ht-chat-toggle', handler);
+  }, []);
+
   return (
-    <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end gap-3">
+    <div className={`fixed z-50 flex flex-col items-end gap-3 ${
+      hideToggleButton ? 'top-[68px] right-6' : 'bottom-6 right-6'
+    }`}>
       {/* Chat Window */}
       <AnimatePresence>
         {isOpen && (
           <motion.div
-            initial={{ opacity: 0, scale: 0.8, y: 20 }}
+            initial={{ opacity: 0, scale: 0.8, y: hideToggleButton ? -20 : 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.8, y: 20 }}
+            exit={{ opacity: 0, scale: 0.8, y: hideToggleButton ? -20 : 20 }}
             transition={{ type: 'spring', damping: 25, stiffness: 300 }}
             className="w-[460px] bg-white rounded-3xl shadow-2xl border border-gray-100 overflow-hidden flex flex-col"
             style={{ height: '560px' }}
@@ -346,24 +355,26 @@ export default function ChatBox() {
       </AnimatePresence>
 
       {/* Toggle Button */}
-      <motion.button
-        onClick={() => setIsOpen(!isOpen)}
-        whileHover={{ scale: 1.05 }}
-        whileTap={{ scale: 0.95 }}
-        className="w-14 h-14 bg-gradient-to-br from-blue-900 to-blue-600 hover:from-blue-800 hover:to-blue-500 rounded-full shadow-2xl flex items-center justify-center relative"
-      >
-        <AnimatePresence mode="wait">
-          {isOpen ? (
-            <motion.div key="close" initial={{ rotate: -90, opacity: 0 }} animate={{ rotate: 0, opacity: 1 }} exit={{ rotate: 90, opacity: 0 }} transition={{ duration: 0.2 }}>
-              <X className="w-6 h-6 text-white" />
-            </motion.div>
-          ) : (
-            <motion.div key="open" initial={{ rotate: 90, opacity: 0 }} animate={{ rotate: 0, opacity: 1 }} exit={{ rotate: -90, opacity: 0 }} transition={{ duration: 0.2 }}>
-              <MessageCircle className="w-6 h-6 text-white" />
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </motion.button>
+      {!hideToggleButton && (
+        <motion.button
+          onClick={() => setIsOpen(!isOpen)}
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
+          className="w-14 h-14 bg-gradient-to-br from-blue-900 to-blue-600 hover:from-blue-800 hover:to-blue-500 rounded-full shadow-2xl flex items-center justify-center relative"
+        >
+          <AnimatePresence mode="wait">
+            {isOpen ? (
+              <motion.div key="close" initial={{ rotate: -90, opacity: 0 }} animate={{ rotate: 0, opacity: 1 }} exit={{ rotate: 90, opacity: 0 }} transition={{ duration: 0.2 }}>
+                <X className="w-6 h-6 text-white" />
+              </motion.div>
+            ) : (
+              <motion.div key="open" initial={{ rotate: 90, opacity: 0 }} animate={{ rotate: 0, opacity: 1 }} exit={{ rotate: -90, opacity: 0 }} transition={{ duration: 0.2 }}>
+                <MessageCircle className="w-6 h-6 text-white" />
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </motion.button>
+      )}
     </div>
   );
 }

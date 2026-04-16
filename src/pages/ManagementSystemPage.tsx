@@ -9,25 +9,25 @@ import MainLayout from '../components/MainLayout';
 
 const roles = [
   {
-    role: 'admin',
-    label: 'Quản trị viên',
-    color: 'bg-red-50 border-red-200 text-red-700',
-    badge: 'bg-red-100 text-red-700',
-    icon: Shield,
-    iconBg: 'bg-red-500',
+    role: 'operator',
+    label: 'Quản lý kho bãi',
+    color: 'bg-green-50 border-green-200 text-green-700',
+    badge: 'bg-green-100 text-green-700',
+    icon: Settings,
+    iconBg: 'bg-green-600',
     features: [
-      'Toàn quyền quản lý hệ thống',
-      'Quản lý người dùng và phân quyền',
-      'Xem báo cáo & thống kê tổng hợp',
-      'Thêm, sửa, xóa container',
-      'Quản lý dữ liệu kho bãi',
-      'Cài đặt hệ thống',
+      'Quản lý kho bãi container',
+      'Cập nhật trạng thái xuất hàng',
+      'Ghi nhận hoạt động kho bãi',
+      'Quản lý vị trí container',
+      'Báo cáo ca làm việc',
+      'Thông báo sự cố',
     ],
-    dashboardPath: '/warehouse/admin/dashboard',
+    dashboardPath: '/warehouse/operator/dashboard',
   },
   {
     role: 'planner',
-    label: 'Lập kế hoạch',
+    label: 'Điều phối vận chuyển',
     color: 'bg-blue-50 border-blue-200 text-blue-700',
     badge: 'bg-blue-100 text-blue-700',
     icon: BarChart3,
@@ -41,23 +41,6 @@ const roles = [
       'Quản lý hãng tàu',
     ],
     dashboardPath: '/warehouse/planner/dashboard',
-  },
-  {
-    role: 'operator',
-    label: 'Vận hành',
-    color: 'bg-green-50 border-green-200 text-green-700',
-    badge: 'bg-green-100 text-green-700',
-    icon: Settings,
-    iconBg: 'bg-green-600',
-    features: [
-      'Theo dõi container thời gian thực',
-      'Cập nhật trạng thái xuất hàng',
-      'Ghi nhận hoạt động kho bãi',
-      'Quản lý vị trí container',
-      'Báo cáo ca làm việc',
-      'Thông báo sự cố',
-    ],
-    dashboardPath: '/warehouse/operator/dashboard',
   },
   {
     role: 'customer',
@@ -76,6 +59,23 @@ const roles = [
     ],
     dashboardPath: '/warehouse/customer/dashboard',
   },
+  {
+    role: 'admin',
+    label: 'Quản trị viên',
+    color: 'bg-red-50 border-red-200 text-red-700',
+    badge: 'bg-red-100 text-red-700',
+    icon: Shield,
+    iconBg: 'bg-red-500',
+    features: [
+      'Toàn quyền quản lý hệ thống',
+      'Quản lý người dùng và phân quyền',
+      'Xem báo cáo & thống kê tổng hợp',
+      'Thêm, sửa, xóa container',
+      'Quản lý dữ liệu kho bãi',
+      'Cài đặt hệ thống',
+    ],
+    dashboardPath: '/warehouse/admin/dashboard',
+  },
 ];
 
 const systemFeatures = [
@@ -90,8 +90,8 @@ const systemFeatures = [
 function getRoleLabel(role: string) {
   switch (role) {
     case 'admin': return 'Quản trị viên';
-    case 'planner': return 'Lập kế hoạch';
-    case 'operator': return 'Vận hành';
+    case 'planner': return 'Điều phối vận chuyển';
+    case 'operator': return 'Quản lý kho bãi';
     default: return 'Khách hàng';
   }
 }
@@ -268,47 +268,6 @@ export default function ManagementSystemPage() {
         </div>
       </section>
 
-      {/* Demo Accounts */}
-      <section className="py-16 bg-blue-900">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            className="text-center"
-          >
-            <h2 className="text-3xl font-bold text-white mb-4">Tài khoản Demo</h2>
-            <p className="text-blue-200 mb-10 max-w-xl mx-auto">
-              Sử dụng các tài khoản demo để trải nghiệm hệ thống với từng vai trò khác nhau.
-            </p>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-              {[
-                { role: 'Admin', email: 'admin@hungthuy.com', pass: 'admin123', color: 'border-red-400' },
-                { role: 'Planner', email: 'planner@hungthuy.com', pass: 'planner123', color: 'border-blue-400' },
-                { role: 'Operator', email: 'operator@hungthuy.com', pass: 'operator123', color: 'border-green-400' },
-                { role: 'Customer', email: 'customer@hungthuy.com', pass: 'customer123', color: 'border-purple-400' },
-              ].map(acc => (
-                <div key={acc.role} className={`bg-white/10 border-2 ${acc.color} rounded-xl p-4 text-left`}>
-                  <div className="text-white font-bold mb-1">{acc.role}</div>
-                  <div className="text-blue-200 text-xs mb-1">📧 {acc.email}</div>
-                  <div className="text-blue-200 text-xs">🔑 {acc.pass}</div>
-                </div>
-              ))}
-            </div>
-
-            {!user && (
-              <Link
-                to="/warehouse/login"
-                className="inline-flex items-center gap-2 px-8 py-4 bg-white text-blue-900 font-bold rounded-xl hover:bg-blue-50 transition-all shadow-xl"
-              >
-                Đăng nhập ngay
-                <ArrowRight className="w-5 h-5" />
-              </Link>
-            )}
-          </motion.div>
-        </div>
-      </section>
     </MainLayout>
   );
 }

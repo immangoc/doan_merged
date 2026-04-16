@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { ImageWithFallback } from '../components/figma/ImageWithFallback';
 import MainLayout from '../components/MainLayout';
+import { newsArticles } from '../data/news';
 
 // --- Animated Counter ---
 function AnimatedCounter({ value, suffix = '', duration = 2000 }: { value: number; suffix?: string; duration?: number }) {
@@ -35,10 +36,10 @@ function AnimatedCounter({ value, suffix = '', duration = 2000 }: { value: numbe
 }
 
 const stats = [
-  { icon: Package, value: 5000, suffix: '+', label: 'Container quản lý', color: 'text-blue-400' },
+  { icon: Package, value: 1000, suffix: '+', label: 'Container quản lý', color: 'text-blue-400' },
   { icon: Users, value: 200, suffix: '+', label: 'Khách hàng tin tưởng', color: 'text-green-400' },
-  { icon: Ship, value: 20, suffix: '+', label: 'Năm kinh nghiệm', color: 'text-yellow-400' },
-  { icon: Globe2, value: 35, suffix: ' tuyến', label: 'Tuyến vận chuyển', color: 'text-purple-400' },
+  { icon: Ship, value: 15, suffix: '+', label: 'Năm kinh nghiệm', color: 'text-yellow-400' },
+  { icon: Globe2, value: 10, suffix: '+ tuyến', label: 'Tuyến vận chuyển', color: 'text-purple-400' },
 ];
 
 const services = [
@@ -93,32 +94,15 @@ const whyUs = [
   { icon: Award, title: 'Chất lượng hàng đầu', desc: 'Đạt các chứng chỉ ISO 9001:2015, ISO 14001' },
 ];
 
-const newsItems = [
-  {
-    date: '15/02/2025',
-    category: 'Thông báo',
-    title: 'Hùng Thủy mở rộng tuyến vận chuyển đến Nhật Bản và Hàn Quốc',
-    desc: 'Công ty Vận tải Cảng biển Hùng Thủy chính thức triển khai tuyến vận chuyển mới đến Nhật Bản và Hàn Quốc từ tháng 3/2025.',
-    img: 'https://images.unsplash.com/photo-1634638025184-9ab3d47c8b74?w=400&q=80',
-  },
-  {
-    date: '05/02/2025',
-    category: 'Sự kiện',
-    title: 'Ra mắt hệ thống quản lý container thông minh phiên bản 2.0',
-    desc: 'Nền tảng quản lý kho bãi container hoàn toàn mới với công nghệ AI, giúp tối ưu hóa quy trình và giảm 30% chi phí vận hành.',
-    img: 'https://images.unsplash.com/photo-1761195696590-3490ea770aa1?w=400&q=80',
-  },
-  {
-    date: '20/01/2025',
-    category: 'Giải thưởng',
-    title: 'Hùng Thủy nhận giải "Doanh nghiệp Logistics xuất sắc 2024"',
-    desc: 'Vinh dự nhận giải thưởng từ Hiệp hội Logistics Việt Nam vì những đóng góp xuất sắc trong phát triển ngành vận tải biển.',
-    img: 'https://images.unsplash.com/photo-1769697263718-c25efb356ff5?w=400&q=80',
-  },
-];
+const newsItems = newsArticles.slice(0, 3);
 
 const partners = [
-  'Maersk Line', 'COSCO Shipping', 'MSC', 'CMA CGM', 'Hapag-Lloyd', 'ONE Ocean Network Express'
+  'Cảng Hải Phòng',
+  'Cảng Đình Vũ',
+  'Cảng Lạch Huyện',
+  'Cảng Tân Vũ',
+  'Cảng Nam Đình Vũ',
+  'Cảng Cái Lân',
 ];
 
 export default function HomePage() {
@@ -171,7 +155,7 @@ export default function HomePage() {
               </h1>
 
               <p className="text-lg text-blue-100 leading-relaxed mb-10 max-w-2xl">
-                Đối tác logistics hàng đầu Việt Nam với hơn 20 năm kinh nghiệm trong ngành vận tải biển và quản lý kho bãi container. Chúng tôi cam kết mang lại giải pháp toàn diện, an toàn và hiệu quả cho doanh nghiệp của bạn.
+                Đối tác hàng đầu Việt Nam với hơn 15 năm kinh nghiệm trong ngành vận tải biển và quản lý kho bãi container. Chúng tôi cam kết mang lại giải pháp toàn diện, an toàn và hiệu quả cho doanh nghiệp của bạn.
               </p>
 
               <div className="flex flex-col sm:flex-row gap-4">
@@ -294,7 +278,7 @@ export default function HomePage() {
                 Đối tác logistics đáng tin cậy của bạn
               </h2>
               <p className="text-gray-600 mb-8 leading-relaxed">
-                Với hơn 20 năm kinh nghiệm trong ngành vận tải biển và quản lý kho bãi container, Hùng Thủy tự hào là đơn vị logistics hàng đầu tại cảng Cát Lái - TP. Hồ Chí Minh.
+                Với hơn 15 năm kinh nghiệm trong ngành vận tải biển và quản lý kho bãi container, Hùng Thủy tự hào là đơn vị logistics hàng đầu tại Hải Phòng và vùng cảng biển miền Bắc.
               </p>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-8">
@@ -428,7 +412,7 @@ export default function HomePage() {
       <section className="py-16 bg-white border-t border-gray-100">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-10">
-            <h3 className="text-gray-500 text-sm font-semibold uppercase tracking-widest">Đối tác hàng đầu thế giới</h3>
+            <h3 className="text-gray-500 text-sm font-semibold uppercase tracking-widest">Đối tác hàng đầu Việt Nam</h3>
           </div>
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-6">
             {partners.map((p) => (
