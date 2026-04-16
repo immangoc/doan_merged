@@ -19,23 +19,19 @@ Your long-term goal (NOT NOW) will be:
 
 ---
 
-## 🚨 CRITICAL RULE (DEFAULT)
+## 🚨 CRITICAL RULE (ABSOLUTE)
 
-Default mode (when the user does not explicitly ask for implementation):
+At this stage, you must:
 
-- ✅ READ → UNDERSTAND → SUMMARIZE only
-- ❌ DO NOT write/modify code
-- ❌ DO NOT propose implementation
+- ❌ DO NOT write any code
+- ❌ DO NOT modify any file
+- ❌ DO NOT suggest implementation
 - ❌ DO NOT redesign system
-- ❌ DO NOT call external APIs or assume outside the codebase
+- ❌ DO NOT call API
+- ❌ DO NOT use Python or any tool to read files
+- ❌ DO NOT assume anything outside the codebase
 
-Implementation mode (ONLY when the user explicitly requests to fix/build/implement, e.g. "fix code", "tạo API"):
-
-- ✅ You MAY read files using available tools
-- ✅ You MAY modify code across projects (backend/frontend/3d) to ensure consistency
-- ✅ You MAY run builds/lints/tests locally to verify changes
-- ✅ You MAY add missing backend APIs when required for frontend/3d integration
-- ✅ Keep changes minimal, consistent with existing architecture and conventions
+👉 Your ONLY job: **READ → UNDERSTAND → SUMMARIZE**
 
 ---
 

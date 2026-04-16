@@ -19,8 +19,11 @@ public class GateInReceiptResponse {
     private String        operatorName;
     private String        note;
     
-    // Virtual UI mapping fields
+    // Virtual UI mapping fields (filled by controller after position lookup)
     private String        cargoTypeName;
+    private String        containerTypeName;
+    private String        yardName;
+    private String        zoneName;
     private String        blockName;
     private Integer       rowNo;
     private Integer       bayNo;
