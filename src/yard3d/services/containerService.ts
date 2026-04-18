@@ -16,7 +16,14 @@ export interface Container {
   status: string;
   yardName: string;
   zoneName: string;
+  blockName: string;
   slot: string;
+  grossWeight: string;
+  declaredValue: string;
+  sealNumber: string;
+  note: string;
+  createdAt: string;
+  gateOutTime: string;
 }
 
 export interface StatusHistoryEntry {
@@ -57,23 +64,40 @@ export async function fetchContainers(
     : Array.isArray(data.content) ? data.content : [];
 
   return {
-    content: content.map((c: Rec) => ({
-      containerId:   Number(c.containerId  ?? c.id ?? 0),
-      containerCode: String(c.containerCode ?? c.code ?? ''),
-      cargoType:     String(c.cargoTypeName ?? c.cargoType ?? ''),
-      containerType: String(c.containerType ?? c.sizeType ?? ''),
-      status:        String(c.statusName   ?? c.status ?? ''),
-      yardName:      String(c.yardName     ?? c.warehouse ?? '—'),
-      zoneName:      String(c.zoneName     ?? c.zone ?? '—'),
-      slot:          String(c.slotName     ?? c.slot ?? '—'),
-    })),
+    content: content.map((c: Rec) => {
+      const row  = c.rowNo  != null ? `R${c.rowNo}`  : null;
+      const bay  = c.bayNo  != null ? `B${c.bayNo}`  : null;
+      const tier = c.tier   != null ? `T${c.tier}`   : null;
+      const built = [row, bay].filter(Boolean).join('') + (tier ? `/${tier}` : '');
+      const slotLabel = String(c.slotName ?? c.slot ?? (built || '—'));
+      const weightStr = c.grossWeight != null ? `${Number(c.grossWeight).toLocaleString('vi-VN')} kg` : '—';
+      const declaredStr = c.declaredValue != null && Number(c.declaredValue) > 0
+        ? `${Number(c.declaredValue).toLocaleString('vi-VN')} VND` : '—';
+      return {
+        containerId:   Number(c.containerId  ?? c.id ?? 0),
+        containerCode: String(c.containerId ?? c.containerCode ?? c.code ?? ''),
+        cargoType:     String(c.cargoTypeName ?? c.cargoType ?? ''),
+        containerType: String(c.containerTypeName ?? c.containerType ?? c.sizeType ?? ''),
+        status:        String(c.statusName   ?? c.status ?? ''),
+        yardName:      String(c.yardName     ?? c.warehouse ?? '—'),
+        zoneName:      String(c.zoneName     ?? c.zone ?? '—'),
+        blockName:     String(c.blockName    ?? '—'),
+        slot:          slotLabel,
+        grossWeight:   weightStr,
+        declaredValue: declaredStr,
+        sealNumber:    String(c.sealNumber ?? '—'),
+        note:          String(c.note ?? '—'),
+        createdAt:     String(c.createdAt ?? ''),
+        gateOutTime:   String(c.gateOutTime ?? ''),
+      };
+    }),
     totalPages:    Number(data.totalPages    ?? 1),
     totalElements: Number(data.totalElements ?? content.length),
   };
 }
 
-export async function fetchStatusHistory(containerId: number): Promise<StatusHistoryEntry[]> {
-  const res = await apiFetch(`/admin/containers/${containerId}/status-history`);
+export async function fetchStatusHistory(containerCode: string): Promise<StatusHistoryEntry[]> {
+  const res = await apiFetch(`/admin/containers/${encodeURIComponent(containerCode)}/status-history`);
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
   const json: Rec = await res.json();

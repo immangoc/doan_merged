@@ -20,12 +20,15 @@ export interface GateInRecord {
   voyageNo: string;
   cargoType: string;         // cargoTypeName
   containerType: string;     // containerTypeName (e.g. "20ft", "40ft")
+  grossWeight: string;       // formatted "25,000 kg"
+  status: string;            // statusName
   yardName: string;
   zoneName: string;
   blockName: string;
   rowNo: number;
   bayNo: number;
   tier: number;
+  slot: string;              // built label "R1B2/T1"
   gateInTime: string;
   operator: string;          // operatorName / createdByUsername
   note: string;
@@ -66,26 +69,37 @@ export async function fetchGateInRecords(page: number, size = 20): Promise<PageR
     : Array.isArray(data.content) ? data.content : [];
 
   return {
-    content: content.map((r: Rec) => ({
-      id:            Number(r.gateInId   ?? r.id ?? 0),
-      containerCode: String(r.containerId ?? ''),
-      voyageNo:      String(r.voyageNo   ?? (r.voyageId ? `#${r.voyageId}` : '')),
-      // Backend sets cargoTypeName via MapStruct from container.cargoType.cargoTypeName
-      cargoType:     String(r.cargoTypeName     ?? ''),
-      // Backend sets containerTypeName via MapStruct from container.containerType.containerTypeName
-      containerType: String(r.containerTypeName ?? ''),
-      // Set by controller after position lookup
-      yardName:      String(r.yardName   ?? ''),
-      zoneName:      String(r.zoneName   ?? ''),
-      blockName:     String(r.blockName  ?? ''),
-      rowNo:         Number(r.rowNo      ?? 0),
-      bayNo:         Number(r.bayNo      ?? 0),
-      tier:          Number(r.tier       ?? 0),
-      gateInTime:    formatDateTime(String(r.gateInTime ?? '')),
-      operator:      String(r.operatorName ?? r.createdByUsername ?? ''),
-      note:          String(r.note ?? ''),
-    })),
-    totalPages:    Number(data.totalPages    ?? 1),
+    content: content.map((r: Rec) => {
+      const rowNo = Number(r.rowNo ?? 0);
+      const bayNo = Number(r.bayNo ?? 0);
+      const tier = Number(r.tier ?? 0);
+      const row = rowNo > 0 ? `R${rowNo}` : '';
+      const bay = bayNo > 0 ? `B${bayNo}` : '';
+      const tierStr = tier > 0 ? `/T${tier}` : '';
+      const slotLabel = `${row}${bay}${tierStr}` || '—';
+      const weightStr = r.grossWeight != null
+        ? `${Number(r.grossWeight).toLocaleString('vi-VN')} kg` : '—';
+      return {
+        id: Number(r.gateInId ?? r.id ?? 0),
+        containerCode: String(r.containerId ?? ''),
+        voyageNo: String(r.voyageNo ?? (r.voyageId ? `#${r.voyageId}` : '')),
+        cargoType: String(r.cargoTypeName ?? ''),
+        containerType: String(r.containerTypeName ?? ''),
+        grossWeight: weightStr,
+        status: String(r.statusName ?? ''),
+        yardName: String(r.yardName ?? ''),
+        zoneName: String(r.zoneName ?? ''),
+        blockName: String(r.blockName ?? ''),
+        rowNo,
+        bayNo,
+        tier,
+        slot: slotLabel,
+        gateInTime: formatDateTime(String(r.gateInTime ?? '')),
+        operator: String(r.operatorName ?? r.createdByUsername ?? ''),
+        note: String(r.note ?? ''),
+      };
+    }),
+    totalPages: Number(data.totalPages ?? 1),
     totalElements: Number(data.totalElements ?? content.length),
   };
 }

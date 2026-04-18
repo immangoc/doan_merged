@@ -30,7 +30,7 @@ const navItems = [
   },
   { icon: Truck, label: 'Quản lý nhập bãi', path: '/yard3d/ha-bai' },
   { icon: Truck, label: 'Quản lý xuất bãi', path: '/yard3d/xuat-bai' },
-  { icon: Box, label: 'Quản lý Kho & Container', path: '/yard3d/kho' },
+  { icon: Box, label: 'Quản lý kho hỏng', path: '/yard3d/kho' },
   { icon: AlertTriangle, label: 'Kiểm soát & Sự cố', path: '/yard3d/kiem-soat' },
 ];
 

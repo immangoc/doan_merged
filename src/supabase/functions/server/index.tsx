@@ -3,6 +3,7 @@ import { cors } from "npm:hono/cors";
 import { logger } from "npm:hono/logger";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import * as bcrypt from "npm:bcryptjs";
+import v1 from "./modules/v1.ts";
 
 const app = new Hono();
 
@@ -33,6 +34,7 @@ const BUCKET_FEES = 'hungthuy-fees';
 const BUCKET_PERMISSIONS = 'hungthuy-permissions';
 const BUCKET_SCHEDULES = 'hungthuy-schedules';
 const BUCKET_SHIPPING_COMPANIES = 'hungthuy-shipping-companies';
+const BUCKET_WITHDRAW_REQUESTS = 'hungthuy-withdraw-requests';
 
 const JWT_SECRET = 'HungThuyWarehouse2025SuperSecret!@#';
 
@@ -53,6 +55,7 @@ async function sBucketInit() {
     BUCKET_PERMISSIONS,
     BUCKET_SCHEDULES,
     BUCKET_SHIPPING_COMPANIES,
+    BUCKET_WITHDRAW_REQUESTS,
   ]) {
     if (!names.includes(name)) {
       await supabase.storage.createBucket(name, { public: false });
@@ -74,6 +77,10 @@ async function sSet(bucket: string, key: string, value: any): Promise<void> {
 
 async function sDel(bucket: string, key: string): Promise<void> {
   await supabase.storage.from(bucket).remove([`${key}.json`]);
+}
+
+async function sExists(bucket: string, key: string): Promise<boolean> {
+  return !!(await sGet(bucket, key));
 }
 
 async function sList(bucket: string): Promise<any[]> {
@@ -142,6 +149,19 @@ async function verifyJWT(token: string): Promise<any | null> {
   } catch {
     return null;
   }
+}
+
+async function sha512Hex(input: string): Promise<string> {
+  const buffer = await crypto.subtle.digest('SHA-512', new TextEncoder().encode(input));
+  return Array.from(new Uint8Array(buffer)).map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+function sortObjectToQuery(params: Record<string, string | number | undefined | null>) {
+  return Object.entries(params)
+    .filter(([, value]) => value !== undefined && value !== null && String(value) !== '')
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(String(value))}`)
+    .join('&');
 }
 
 // ============================================================
@@ -404,6 +424,10 @@ async function autoSeedOnStartup() {
 
     // ── Seed notifications for demo ─────────────────────────────────
     const existingNotifs = await sList(BUCKET_NOTIFICATIONS);
+    const existingWithdrawRequests = await sList(BUCKET_WITHDRAW_REQUESTS);
+    if (existingWithdrawRequests.length === 0) {
+      console.log('✅ Withdraw requests bucket ready');
+    }
     if (existingNotifs.length === 0) {
       const now = new Date();
       const seeds = [
@@ -469,8 +493,15 @@ autoSeedOnStartup();
 // HEALTH
 // ============================================================
 app.get('/make-server-ce1eb60c/health', (c) =>
-  c.json({ status: 'ok', service: 'Hùng Thủy Warehouse API', version: '2.0' })
+  c.json({ status: 'ok', service: 'Hùng Thủy Warehouse API', version: '2.1' })
 );
+
+// ============================================================
+// /api/v1/* — port từ warehouse-service (Spring Boot)
+// Mount sau health, song song với route legacy /make-server-ce1eb60c/* cũ.
+// Backed by Postgres (xem src/supabase/migrations/V*.sql).
+// ============================================================
+app.route('/make-server-ce1eb60c/api/v1', v1);
 
 // ============================================================
 // AUTH — ĐĂNG NHẬP (so sánh với database)
@@ -1383,6 +1414,80 @@ app.post('/make-server-ce1eb60c/admin/seed/shipping-companies', authMiddleware, 
     return c.json({ message: 'Seed shipping-companies thành công', seeded: defaults.length });
   } catch (e: any) {
     return c.json({ error: 'Lỗi seed shipping-companies: ' + e.message }, 500);
+  }
+});
+
+// ============================================================
+// WALLET + WITHDRAW REQUESTS
+// ============================================================
+app.get('/make-server-ce1eb60c/wallet/withdraw-requests', authMiddleware, requireRole('admin'), async (c) => {
+  try {
+    const items = (await sList(BUCKET_WITHDRAW_REQUESTS))
+      .sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+    return c.json({ items });
+  } catch (e: any) {
+    return c.json({ error: 'Lỗi lấy yêu cầu rút: ' + e.message }, 500);
+  }
+});
+
+app.post('/make-server-ce1eb60c/wallet/withdraw-requests', authMiddleware, requireRole('customer'), async (c) => {
+  try {
+    const u = c.get('authUser');
+    const body = await c.req.json();
+    const reason = body?.reason ? String(body.reason).trim() : '';
+    const bank_account = body?.bank_account ? String(body.bank_account).trim() : '';
+    const bank_name = body?.bank_name ? String(body.bank_name).trim() : '';
+
+    if (!reason || !bank_account || !bank_name) {
+      return c.json({ error: 'Thiếu lý do rút, STK hoặc tên ngân hàng' }, 400);
+    }
+
+    const now = new Date().toISOString();
+    const id = crypto.randomUUID();
+    const request = {
+      id,
+      user_id: u.id,
+      user_name: u.name,
+      reason,
+      bank_account,
+      bank_name,
+      status: 'pending',
+      created_at: now,
+      updated_at: now,
+    };
+
+    await sSet(BUCKET_WITHDRAW_REQUESTS, id, request);
+
+    const notificationId = crypto.randomUUID();
+    await sSet(BUCKET_NOTIFICATIONS, notificationId, {
+      id: notificationId,
+      title: 'Yêu cầu rút tiền mới',
+      message: `${u.name} vừa tạo yêu cầu rút tiền: ${reason} (${bank_name} - ${bank_account})`,
+      type: 'warning',
+      read: false,
+      archived: false,
+      created_at: now,
+      created_by: u.id,
+      target_role: 'admin',
+      source_type: 'withdraw_request',
+      source_id: id,
+    });
+
+    const logId = crypto.randomUUID();
+    await sSet(BUCKET_ACTIVITIES, logId, {
+      id: logId,
+      user_id: u.id,
+      user_name: u.name,
+      action_type: 'create',
+      entity_type: 'withdraw_request',
+      entity_id: id,
+      description: `Tạo yêu cầu rút tiền: ${reason}`,
+      created_at: now,
+    });
+
+    return c.json({ request, message: 'Tạo yêu cầu rút tiền thành công' });
+  } catch (e: any) {
+    return c.json({ error: 'Lỗi tạo yêu cầu rút: ' + e.message }, 500);
   }
 });
 

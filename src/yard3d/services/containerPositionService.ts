@@ -38,6 +38,10 @@ interface ContainerPosition {
   rowNo:       number;
   bayNo:       number;
   tier:        number;
+  whName?:     string;
+  zoneName?:   string;
+  blockName?:  string;
+  statusText?: string;
 }
 
 interface SlotCoords {
@@ -128,12 +132,13 @@ async function fetchContainersInYard(): Promise<ContainerInfo[]> {
     // ContainerResponse.containerId is the container CODE string (e.g. "CTN-001"),
     // not a numeric DB id. Use it as containerCode for API calls.
     const code = String(c.containerId ?? c.containerCode ?? c.code ?? c.containerNumber ?? c.containerNo ?? '');
+    const gateInRaw = String(c.gateInDate ?? c.importDate ?? c.arrivalDate ?? c.checkInDate ?? c.createdAt ?? c.updatedAt ?? '');
     return {
       containerId:   code.split('').reduce((h, ch) => (h * 31 + ch.charCodeAt(0)) & 0xffffff, 0),
       containerCode: code,
       cargoType:     String(c.cargoType ?? c.cargoTypeName ?? c.cargo ?? ''),
       weight:        weightStr,
-      gateInDate:    String(c.gateInDate ?? c.importDate ?? c.arrivalDate ?? c.checkInDate ?? ''),
+      gateInDate:    gateInRaw,
       // '40ft' if any size field contains "40"; otherwise '20ft'
       sizeType:      sizeRaw.toUpperCase().includes('40') ? '40ft' : '20ft',
     };
@@ -155,6 +160,10 @@ async function fetchOnePosition(id: string): Promise<ContainerPosition | null> {
       rowNo:   Number(d.rowNo  ?? d.row  ?? 1),
       bayNo:   Number(d.bayNo  ?? d.bay  ?? d.col ?? 1),
       tier:    Number(d.tier   ?? d.tierNo ?? d.tiers ?? d.floor ?? 1),
+      whName:  String(d.whName ?? d.yardName ?? d.warehouseName ?? ''),
+      zoneName:String(d.zoneName ?? d.zone ?? ''),
+      blockName:String(d.blockName ?? d.block ?? ''),
+      statusText:String(d.statusName ?? d.status ?? 'Trong kho'),
     };
   } catch {
     return null;
@@ -234,15 +243,21 @@ export async function fetchAndSetOccupancy(yards: ApiYard[]): Promise<void> {
       pos.tier,
     );
 
+    const gateInDate = formatDate(ctn.gateInDate);
+    const storageDuration = computeStorageDuration(ctn.gateInDate);
     const occ: SlotOccupancy = {
       containerId:     ctn.containerId,
       containerCode:   ctn.containerCode,
       cargoType:       ctn.cargoType,
       weight:          ctn.weight,
-      gateInDate:      formatDate(ctn.gateInDate),
-      storageDuration: computeStorageDuration(ctn.gateInDate),
+      gateInDate,
+      storageDuration,
       sizeType:        ctn.sizeType,
       tier:            pos.tier,
+      whName:          pos.whName ?? '',
+      zoneName:        pos.zoneName ?? '',
+      blockName:       pos.blockName ?? '',
+      statusText:      pos.statusText ?? 'Trong kho',
     };
 
     map.set(key, occ);

@@ -2,6 +2,7 @@ import { createContext, useContext, useState, useEffect, ReactNode } from 'react
 
 // ─── Backend base URL ─────────────────────────────────────────────────────────
 export const API_BASE = 'http://localhost:8080/api/v1';
+export const API_SERVER_BASE = 'http://localhost:8080/api/v1';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 export interface AuthUser {

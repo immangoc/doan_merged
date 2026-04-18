@@ -5,20 +5,27 @@ import { fetchContainers, fetchStatusHistory } from '../services/containerServic
 import type { Container, StatusHistoryEntry, ContainerFilter } from '../services/containerService';
 import './management.css';
 
-const STATUS_OPTIONS = ['', 'IN_YARD', 'GATE_IN', 'GATE_OUT', 'PENDING', 'APPROVED', 'CANCELLED'];
+const STATUS_OPTIONS = ['DAMAGED'];
 const TYPE_OPTIONS = ['', '20ft', '40ft'];
 
 function statusBadgeClass(status: string): string {
-  if (status === 'IN_YARD') return 'mgmt-badge mgmt-badge-in-yard';
-  if (status === 'GATE_OUT') return 'mgmt-badge mgmt-badge-success';
-  if (status === 'APPROVED') return 'mgmt-badge mgmt-badge-info';
-  if (status === 'CANCELLED') return 'mgmt-badge mgmt-badge-critical';
+  if (status.toUpperCase() === 'DAMAGED') return 'mgmt-badge mgmt-badge-critical';
   return 'mgmt-badge mgmt-badge-neutral';
 }
 
+function formatDate(raw: string): string {
+  if (!raw) return '—';
+  const d = new Date(raw);
+  if (isNaN(d.getTime())) return raw;
+  const dd = String(d.getDate()).padStart(2, '0');
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const hh = String(d.getHours()).padStart(2, '0');
+  const mi = String(d.getMinutes()).padStart(2, '0');
+  return `${dd}/${mm}/${d.getFullYear()} ${hh}:${mi}`;
+}
+
 // ─── Status history side panel ────────────────────────────────────────────────
-function HistoryPanel({ containerId, containerCode, onClose }: {
-  containerId: number;
+function HistoryPanel({ containerCode, onClose }: {
   containerCode: string;
   onClose: () => void;
 }) {
@@ -30,12 +37,12 @@ function HistoryPanel({ containerId, containerCode, onClose }: {
     let cancelled = false;
     setLoading(true);
     setError(null);
-    fetchStatusHistory(containerId)
+    fetchStatusHistory(containerCode)
       .then((h) => { if (!cancelled) setHistory(h); })
       .catch((e) => { if (!cancelled) setError(e instanceof Error ? e.message : 'Lỗi tải lịch sử'); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [containerId]);
+  }, [containerCode]);
 
   return (
     <div className="mgmt-history-panel">
@@ -73,13 +80,13 @@ export function Kho() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const [filter, setFilter] = useState<ContainerFilter>({});
-  const [pendingFilter, setPendingFilter] = useState<ContainerFilter>({});
+  const [filter, setFilter] = useState<ContainerFilter>({ statusName: 'DAMAGED' });
+  const [pendingFilter, setPendingFilter] = useState<ContainerFilter>({ statusName: 'DAMAGED' });
 
   const [selectedContainer, setSelectedContainer] = useState<Container | null>(null);
 
   function applyFilter() {
-    setFilter(pendingFilter);
+    setFilter((prev) => ({ ...prev, ...pendingFilter, statusName: 'DAMAGED' }));
     setPage(0);
   }
 
@@ -107,11 +114,11 @@ export function Kho() {
 
         <div className="mgmt-header">
           <div className="mgmt-header-text">
-            <h1>Quản lý Kho &amp; Container</h1>
-            <p>Tìm kiếm, lọc và xem lịch sử trạng thái container</p>
+            <h1>Quản lý kho hỏng</h1>
+            <p>Tiếp nhận, theo dõi và xử lý container trong kho hỏng</p>
           </div>
           {!loading && !error && (
-            <span style={{ fontSize: '0.8rem', color: '#6b7280' }}>{totalItems} container</span>
+            <span style={{ fontSize: '0.8rem', color: '#6b7280' }}>{totalItems} mục trong kho hỏng</span>
           )}
         </div>
 
@@ -120,21 +127,15 @@ export function Kho() {
             <Search size={14} className="mgmt-search-ico" />
             <input
               type="text"
-              placeholder="Tìm mã container..."
+              placeholder="Tìm mã container hỏng..."
               value={pendingFilter.keyword ?? ''}
               onChange={(e) => setPendingFilter((f) => ({ ...f, keyword: e.target.value }))}
               onKeyDown={(e) => e.key === 'Enter' && applyFilter()}
             />
           </div>
-          <select
-            className="mgmt-select"
-            value={pendingFilter.statusName ?? ''}
-            onChange={(e) => setPendingFilter((f) => ({ ...f, statusName: e.target.value }))}
-          >
-            {STATUS_OPTIONS.map((s) => (
-              <option key={s} value={s}>{s || 'Tất cả trạng thái'}</option>
-            ))}
-          </select>
+          <div className="mgmt-select" style={{ display: 'flex', alignItems: 'center', padding: '0 12px', background: '#f8fafc', color: '#374151', fontSize: '0.82rem' }}>
+            Chỉ hiển thị container damaged
+          </div>
           <select
             className="mgmt-select"
             value={pendingFilter.containerType ?? ''}
@@ -152,36 +153,39 @@ export function Kho() {
             <table className="mgmt-table">
               <thead>
                 <tr>
-                  <th>Mã container</th>
+                  <th>Mã container hỏng</th>
                   <th>Loại hàng</th>
                   <th>Kích thước</th>
+                  <th>Trọng lượng</th>
                   <th>Trạng thái</th>
-                  <th>Kho</th>
+                  <th>Kho hỏng</th>
                   <th>Zone</th>
+                  <th>Block</th>
                   <th>Vị trí</th>
+                  <th>Ngày nhập hệ thống</th>
                 </tr>
               </thead>
               <tbody>
                 {loading && (
                   <tr className="mgmt-state-row">
-                    <td colSpan={7}>Đang tải dữ liệu...</td>
+                    <td colSpan={10}>Đang tải dữ liệu...</td>
                   </tr>
                 )}
                 {!loading && error && (
                   <tr className="mgmt-state-row mgmt-state-error">
-                    <td colSpan={7}>{error}</td>
+                    <td colSpan={10}>{error}</td>
                   </tr>
                 )}
                 {!loading && !error && containers.length === 0 && (
                   <tr className="mgmt-state-row">
-                    <td colSpan={7}>Không tìm thấy container</td>
+                    <td colSpan={10}>Không tìm thấy container damaged</td>
                   </tr>
                 )}
                 {!loading && !error && containers.map((c) => (
                   <tr
                     key={c.containerId}
                     onClick={() => setSelectedContainer(
-                      selectedContainer?.containerId === c.containerId ? null : c
+                      selectedContainer?.containerCode === c.containerCode ? null : c
                     )}
                     style={{ cursor: 'pointer' }}
                   >
@@ -190,12 +194,15 @@ export function Kho() {
                     <td>
                       <span className="mgmt-badge mgmt-badge-neutral">{c.containerType || '—'}</span>
                     </td>
+                    <td>{c.grossWeight}</td>
                     <td>
                       <span className={statusBadgeClass(c.status)}>{c.status || '—'}</span>
                     </td>
-                    <td>{c.yardName}</td>
-                    <td>{c.zoneName}</td>
-                    <td>{c.slot}</td>
+                    <td>{c.yardName || 'Kho hỏng'}</td>
+                    <td>{c.zoneName || '—'}</td>
+                    <td>{c.blockName || '—'}</td>
+                    <td>{c.slot || '—'}</td>
+                    <td>{formatDate(c.createdAt)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -238,7 +245,6 @@ export function Kho() {
 
           {selectedContainer && (
             <HistoryPanel
-              containerId={selectedContainer.containerId}
               containerCode={selectedContainer.containerCode}
               onClose={() => setSelectedContainer(null)}
             />

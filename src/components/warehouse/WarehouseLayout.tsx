@@ -72,7 +72,7 @@ export default function WarehouseLayout({ children }: WarehouseLayoutProps) {
       { name: 'Tài khoản', path: '/warehouse/customer/account', icon: Users, roles: ['customer'] },
       { name: 'Container của tôi', path: '/warehouse/customer/my-containers', icon: Package, roles: ['customer'] },
       { name: 'Đơn hàng', path: '/warehouse/customer/orders', icon: FileText, roles: ['customer'] },
-      { name: 'Tra cứu & tiện ích', path: '/warehouse/customer/payments', icon: DollarSign, roles: ['customer'] },
+      { name: 'Ví', path: '/warehouse/customer/wallet', icon: DollarSign, roles: ['customer'] },
     ];
 
     return allItems.filter(item => {

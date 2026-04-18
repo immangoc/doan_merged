@@ -20,10 +20,11 @@ import QuanLyLichPage from './pages/warehouse/admin/QuanLyLich';
 import QuanLyCuocPhiPage from './pages/warehouse/admin/QuanLyCuocPhi';
 import QuanTriHeThongPage from './pages/warehouse/admin/QuanTriHeThong';
 import QuanLyTaiKhoanPage from './pages/warehouse/admin/QuanLyTaiKhoan';
+import WithdrawalRequestsPage from './pages/warehouse/admin/WithdrawalRequests';
 import CustomerAccount from './pages/warehouse/role/CustomerAccount';
 import MyContainers from './pages/warehouse/role/MyContainers';
 import Orders from './pages/warehouse/role/Orders';
-import Payments from './pages/warehouse/role/Payments';
+import WalletPage from './pages/warehouse/role/Wallet';
 
 // Public Pages
 import HomePage from './pages/HomePage';
@@ -101,6 +102,7 @@ export default function App() {
             <Route path="section/quan-ly-cuoc-phi-bieu-cuoc" element={<QuanLyCuocPhiPage />} />
             <Route path="section/quan-tri-he-thong" element={<QuanTriHeThongPage />} />
             <Route path="section/quan-ly-tai-khoan" element={<QuanLyTaiKhoanPage />} />
+            <Route path="section/yeu-cau-rut-tien" element={<WithdrawalRequestsPage />} />
             <Route path="*" element={<Navigate to="/warehouse/admin/dashboard" replace />} />
           </Route>
           <Route
@@ -152,14 +154,13 @@ export default function App() {
             }
           />
           <Route
-            path="/warehouse/customer/payments"
+            path="/warehouse/customer/wallet"
             element={
               <ProtectedRoute allowedRoles={['customer']}>
-                <Payments />
+                <WalletPage />
               </ProtectedRoute>
             }
           />
-
           {/* Yard3D Module — Warehouse 3D management interface */}
           <Route
             path="/yard3d/*"

@@ -22,6 +22,12 @@ export interface ImportedContainer {
   priority: string;
 }
 
+export interface DamagedContainer extends ImportedContainer {
+  status: 'damaged';
+  damagedAt: string;
+  sourceWarehouse: string;
+}
+
 export interface SuggestedPosition {
   whType: WHType;
   whName: string;
@@ -40,6 +46,7 @@ export interface SuggestedPosition {
 
 // ─── Store ──────────────────────────────────────────────────────────────────
 let importedContainers: ImportedContainer[] = [];
+let damagedContainers: DamagedContainer[] = [];
 let listeners: (() => void)[] = [];
 
 function notify() {
@@ -55,6 +62,10 @@ export function subscribe(fn: () => void): () => void {
 
 export function getImportedContainers(): ImportedContainer[] {
   return importedContainers;
+}
+
+export function getDamagedContainers(): DamagedContainer[] {
+  return damagedContainers;
 }
 
 /** @deprecated Phase 5 — replaced by confirmGateIn() in gateInService. */
@@ -146,6 +157,17 @@ export function findSuggestedPosition(_cargoType: string, _preferredSize: '20ft'
 /** Get imported containers for a specific zone */
 export function getImportedForZone(whType: WHType, zoneName: string): ImportedContainer[] {
   return importedContainers.filter((c) => c.whType === whType && c.zone === zoneName);
+}
+
+export function addDamagedContainer(ctn: Omit<DamagedContainer, 'status' | 'damagedAt'>): DamagedContainer {
+  const damaged: DamagedContainer = {
+    ...ctn,
+    status: 'damaged',
+    damagedAt: new Date().toISOString(),
+  };
+  damagedContainers = [damaged, ...damagedContainers];
+  notify();
+  return damaged;
 }
 
 export { cargoTypeToWHType, cargoTypeToWHName };

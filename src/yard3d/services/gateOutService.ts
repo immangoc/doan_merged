@@ -53,6 +53,17 @@ function formatDate(raw: string): string {
   return `${d.getDate().toString().padStart(2, '0')}/${(d.getMonth() + 1).toString().padStart(2, '0')}/${d.getFullYear()}`;
 }
 
+async function containerStatus(containerCode: string): Promise<string | null> {
+  if (!containerCode.trim()) return null;
+  const res = await apiFetch(`/admin/containers/${encodeURIComponent(containerCode.trim())}`);
+  if (res.status === 404) return null;
+  if (!res.ok) return null;
+
+  const json: Rec = await res.json().catch(() => ({}));
+  const data: Rec = json.data ?? json;
+  return String(data.statusName ?? data.status ?? '').toUpperCase() || null;
+}
+
 // ─── Export ───────────────────────────────────────────────────────────────────
 
 /**
@@ -113,26 +124,54 @@ export async function performGateOut(containerId: string): Promise<void> {
 // ─── Waiting list ─────────────────────────────────────────────────────────────
 
 /**
- * Option A: directly query AVAILABLE containers.
- * GET /admin/containers?statusName=AVAILABLE&size=100
+ * Fetch containers waiting for gate-in from approved admin orders.
+ * GET /admin/orders?statusName=APPROVED&size=100
  *
- * Shows every AVAILABLE container so operators can gate them in,
- * regardless of whether an order has been approved yet.
+ * Flattens each approved order's containerIds so the 3D gate-in flow can
+ * open the exact container selected by admin approval.
  */
 export async function fetchWaitingContainers(): Promise<WaitingItem[]> {
-  const res = await apiFetch('/admin/containers?statusName=AVAILABLE&size=100');
+  const res = await apiFetch('/admin/orders?statusName=APPROVED&size=100&sortBy=createdAt&direction=desc');
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
   const json: Rec = await res.json();
-  const containers = toList(json);
+  const orders = toList(json);
 
-  return containers.map((c: Rec) => ({
-    orderId:       0,
-    containerCode: String(c.containerCode ?? c.container_number ?? c.code ?? c.containerId ?? ''),
-    cargoType:     String(c.cargoTypeName ?? c.cargoType ?? ''),
-    containerType: String(c.containerTypeName ?? c.containerType ?? ''),
-    weight:        String(c.grossWeight ?? ''),
-    orderDate:     formatDate(String(c.createdAt ?? '')),
-    customerName:  '',
+  const rawItems = orders.flatMap((o: Rec) => {
+    const containerIds = Array.isArray(o.containerIds) ? o.containerIds : [];
+    const customerName = String(o.customerName ?? o.customerFullName ?? o.fullName ?? '');
+    const cargoType = String(o.cargoTypeName ?? o.cargoType ?? '');
+    const containerType = String(o.containerTypeName ?? o.containerType ?? '');
+    const weight = String(o.grossWeight ?? o.weight ?? '');
+    const orderDate = formatDate(String(o.createdAt ?? o.orderDate ?? ''));
+
+    return containerIds.length > 0
+      ? containerIds.map((containerCode: string) => ({
+          orderId: Number(o.orderId ?? o.id ?? 0),
+          containerCode: String(containerCode ?? ''),
+          cargoType,
+          containerType,
+          weight,
+          orderDate,
+          customerName,
+        }))
+      : [{
+          orderId: Number(o.orderId ?? o.id ?? 0),
+          containerCode: String(o.containerCode ?? o.code ?? o.containerId ?? ''),
+          cargoType,
+          containerType,
+          weight,
+          orderDate,
+          customerName,
+        }];
+  }).filter((item) => item.containerCode);
+
+  const checked = await Promise.all(rawItems.map(async (item) => {
+    const status = await containerStatus(item.containerCode);
+    return { item, status };
   }));
+
+  return checked
+    .filter(({ status }) => status === 'GATE_IN' || status === 'IN_YARD')
+    .map(({ item }) => item);
 }

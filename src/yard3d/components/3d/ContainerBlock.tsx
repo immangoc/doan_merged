@@ -99,11 +99,26 @@ interface ContainerBlockProps {
   floor?: number;
   slot?: string;
   highlightId?: string;
+  onDamageClick?: (payload: {
+    containerCode: string;
+    cargoType: string;
+    containerType: string;
+    weight: string;
+    whName: string;
+    blockName: string;
+    zone: string;
+    slot: string;
+    floor: number;
+  }) => void;
   // Phase 4: real data props (optional — falls back to mock if not provided)
-  cargoType?:      string;
-  weight?:         string;
-  gateInDate?:     string;
+  cargoType?:       string;
+  containerType?:   string;
+  weight?:          string;
+  gateInDate?:      string;
   storageDuration?: string;
+  whName?:          string;
+  blockName?:       string;
+  statusText?:      string;
 }
 
 export function ContainerBlock({
@@ -116,10 +131,15 @@ export function ContainerBlock({
   floor = 1,
   slot = 'CT01',
   highlightId,
+  onDamageClick,
   cargoType,
+  containerType,
   weight,
   gateInDate,
   storageDuration,
+  whName,
+  blockName,
+  statusText,
 }: ContainerBlockProps) {
   const LENGTH = sizeType === '40ft' ? 12.0 : 6.0; // 40ft = exactly 2× 20ft
   const color = getContainerColor(colorSeed);
@@ -128,6 +148,8 @@ export function ContainerBlock({
   const bounceRef = useRef<THREE.Group>(null);
   const bodyRef = useRef<THREE.MeshStandardMaterial>(null);
   const [hovered, setHovered] = useState(false);
+  const [tooltipHovered, setTooltipHovered] = useState(false);
+  const [pinned, setPinned] = useState(false);
 
   const isHighlighted = !!(highlightId && id.toLowerCase().includes(highlightId.toLowerCase()));
 
@@ -137,7 +159,7 @@ export function ContainerBlock({
     if (!bounceRef.current) return;
     if (isHighlighted) {
       bounceRef.current.position.y = Math.sin(state.clock.elapsedTime * 5) * 0.35;
-    } else if (hovered) {
+    } else if (hovered || tooltipHovered || pinned) {
       bounceRef.current.position.y = Math.sin(state.clock.elapsedTime * 4) * 0.1;
     } else if (Math.abs(bounceRef.current.position.y) > 0.001) {
       bounceRef.current.position.y = THREE.MathUtils.lerp(bounceRef.current.position.y, 0, 0.1);
@@ -150,18 +172,20 @@ export function ContainerBlock({
   });
 
   const vLabel          = `Zone ${zone} - ${statusLabel[status]} - Tầng ${floor} - ${slot}`;
-  const displayCargo    = cargoType      ?? `${sizeType} - ${statusLabel[status]}`;
+  const displayCargo    = cargoType      ?? containerType ?? `${sizeType} - ${statusLabel[status]}`;
   const displayWeight   = weight         ?? '—';
   const displayGateIn   = gateInDate     ?? '—';
   const displayDuration = storageDuration ?? '—';
+  const displayStatus   = statusText     ?? 'Lưu kho';
+  const displayZone     = zone           ?? '—';
 
   return (
     <group position={position}>
       <group ref={bounceRef}>
         {/* Main corrugated body */}
         <mesh
-          onPointerOver={(e) => { e.stopPropagation(); setHovered(true); }}
-          onPointerOut={(e)  => { e.stopPropagation(); setHovered(false); }}
+          onPointerOver={(e) => { e.stopPropagation(); setHovered(true); setPinned(false); }}
+          onPointerOut={(e)  => { e.stopPropagation(); if (!tooltipHovered && !pinned) setHovered(false); }}
         >
           <boxGeometry args={[WIDTH, HEIGHT, LENGTH]} />
           <meshStandardMaterial
@@ -187,18 +211,22 @@ export function ContainerBlock({
         </mesh>
 
         {/* Hover tooltip */}
-        {hovered && (
-          <Html position={[0, HEIGHT / 2 + 1.5, 0]} center style={{ pointerEvents: 'none' }}>
-            <div style={{
-              background: '#fff',
-              border: '1px solid #E5E7EB',
-              borderRadius: '12px',
-              boxShadow: '0 8px 24px rgba(0,0,0,0.14)',
-              padding: '14px 18px',
-              width: '290px',
-              fontFamily: 'Inter, -apple-system, sans-serif',
-              pointerEvents: 'none',
-            }}>
+        {(hovered || tooltipHovered || pinned) && (
+          <Html position={[0, HEIGHT / 2 + 1.5, 0]} center style={{ pointerEvents: 'auto' }}>
+            <div
+              onMouseEnter={() => { setTooltipHovered(true); setHovered(true); }}
+              onMouseLeave={() => { setTooltipHovered(false); if (!pinned) setHovered(false); }}
+              style={{
+                background: '#fff',
+                border: '1px solid #E5E7EB',
+                borderRadius: '12px',
+                boxShadow: '0 8px 24px rgba(0,0,0,0.14)',
+                padding: '14px 18px',
+                width: '290px',
+                fontFamily: 'Inter, -apple-system, sans-serif',
+                pointerEvents: 'auto',
+              }}
+            >
               <div style={{ textAlign: 'center', marginBottom: '10px' }}>
                 <div style={{
                   display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
@@ -219,8 +247,9 @@ export function ContainerBlock({
                     { label: 'Mã số Container:', value: id },
                     { label: 'Loại hàng:', value: displayCargo },
                     { label: 'Trọng lượng:', value: displayWeight },
-                    { label: 'Trạng thái:', value: 'Lưu kho', style: { color: '#F97316', fontWeight: '600' as const } },
+                    { label: 'Trạng thái:', value: displayStatus, style: { color: '#F97316', fontWeight: '600' as const } },
                     { label: 'Vị trí:', value: vLabel, style: { fontWeight: '700' as const, color: '#111827' } },
+                    { label: 'Zone:', value: displayZone },
                     { label: 'Ngày nhập bãi:', value: displayGateIn },
                     { label: 'Thời gian lưu kho:', value: displayDuration },
                   ].map(({ label, value, style }) => (
@@ -235,6 +264,40 @@ export function ContainerBlock({
                   ))}
                 </tbody>
               </table>
+
+              <div style={{ marginTop: '12px', display: 'flex', justifyContent: 'center' }}>
+                <button
+                  type="button"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setPinned(true);
+                    onDamageClick?.({
+                      containerCode: id,
+                      cargoType: displayCargo,
+                      containerType: containerType ?? sizeType,
+                      weight: displayWeight,
+                      whName: whName ?? 'Kho hỏng',
+                      blockName: blockName ?? `Zone ${zone}`,
+                      zone,
+                      slot,
+                      floor,
+                    });
+                  }}
+                  style={{
+                    border: '1px solid #F59E0B',
+                    background: '#FFF7ED',
+                    color: '#C2410C',
+                    borderRadius: '999px',
+                    padding: '6px 14px',
+                    fontSize: '12px',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                  }}
+                >
+                  Báo hỏng
+                </button>
+              </div>
             </div>
           </Html>
         )}

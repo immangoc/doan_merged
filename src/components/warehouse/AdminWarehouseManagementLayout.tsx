@@ -17,6 +17,7 @@ type AdminNavItem = {
     | 'quanlykho'
     | 'quantritaikhoan'
     | 'taikhoan'
+    | 'yeucauruttien'
     | 'xuatbaocao';
   label: string;
   to: string;
@@ -128,6 +129,7 @@ export default function AdminWarehouseManagementLayout(
       { id: 'cuocphi', label: 'Cước Phí', to: '/warehouse/admin/section/quan-ly-cuoc-phi-bieu-cuoc', icon: IconDollar },
       { id: 'quanlykho', label: 'Quản lý kho', to: '/tong-quan', icon: IconWarehouse },
       { id: 'quantritaikhoan', label: 'Quản trị hệ thống', to: '/warehouse/admin/section/quan-tri-he-thong', icon: IconUsers },
+      { id: 'yeucauruttien', label: 'Yêu cầu rút tiền', to: '/warehouse/admin/section/yeu-cau-rut-tien', icon: IconDollar },
       { id: 'taikhoan', label: 'Tài khoản Admin', to: '/warehouse/admin/section/quan-ly-tai-khoan', icon: IconUser },
     ],
     [],

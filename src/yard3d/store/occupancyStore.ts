@@ -17,6 +17,10 @@ export interface SlotOccupancy {
   storageDuration: string;       // computed, e.g. "12 ngày", "3 tháng"
   sizeType:        '20ft' | '40ft';
   tier:            number;       // 1-based
+  whName?:         string;
+  zoneName?:       string;
+  blockName?:      string;
+  statusText?:     string;
 }
 
 export type OccupancyMap = Map<string, SlotOccupancy>;

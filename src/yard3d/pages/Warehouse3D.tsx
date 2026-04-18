@@ -4,6 +4,7 @@ import {
   Package, Calendar, Truck, Snowflake, AlertTriangle, Layers, Info,
   Shuffle, RefreshCw, LogOut, X, FileText, LayoutDashboard,
 } from 'lucide-react';
+import { toast } from 'sonner';
 import { useNavigate } from 'react-router';
 import { DashboardLayout } from '../components/layout/DashboardLayout';
 import { WarehouseScene } from '../components/3d/WarehouseScene';
@@ -15,9 +16,7 @@ import { Legend } from '../components/ui/Legend';
 
 import type { WHType, ZoneInfo, WHStat, PreviewPosition } from '../data/warehouse';
 import { useDashboardStats } from '../hooks/useDashboardStats';
-import {
-  subscribe, getImportedContainers, cargoTypeToWHType, cargoTypeToWHName,
-} from '../data/containerStore';
+import { cargoTypeToWHType, subscribe, getImportedContainers, addDamagedContainer } from '../data/containerStore';
 import type { SuggestedPosition } from '../data/containerStore';
 import { fetchRecommendation, confirmGateIn, resolveYardId } from '../services/gateInService';
 import type { GateInParams } from '../services/gateInService';
@@ -29,6 +28,7 @@ import { fetchWaitingContainers, searchInYardContainers } from '../services/gate
 import type { WaitingItem, InYardContainer } from '../services/gateOutService';
 import { performGateOutForManagement, fetchGateOutInvoice } from '../services/gateOutManagementService';
 import type { GateOutInvoice } from '../services/gateOutManagementService';
+import { reportDamage } from '../services/damageService';
 import { OptimizationPanel } from '../components/OptimizationPanel';
 import './Warehouse3D.css';
 
@@ -218,6 +218,9 @@ function WaitingListPanel({ onClose, onSelect, refreshKey }: {
             <div className="waiting-icon"><Truck size={18} /></div>
             <div style={{ flex: 1, textAlign: 'left' }}>
               <span className="waiting-code">{ctn.containerCode || `Order #${ctn.orderId}`}</span>
+              <div style={{ fontSize: '0.7rem', color: '#9ca3af', marginTop: '2px' }}>
+                Đơn #{ctn.orderId}{ctn.orderDate ? ` · ${ctn.orderDate}` : ''}
+              </div>
               {(ctn.cargoType || ctn.containerType) && (
                 <div style={{ fontSize: '0.72rem', color: '#6b7280', marginTop: '2px' }}>
                   {[ctn.cargoType, ctn.containerType].filter(Boolean).join(' · ')}
@@ -265,7 +268,7 @@ function ImportPanel({ onClose, initialCode, initialItem, onPreviewChange, onWhT
   });
   const [suggestion, setSuggestion] = useState<SuggestedPosition | null>(null);
   const [manualZone, setManualZone] = useState('Zone A');
-  const [manualWarehouse, setManualWH] = useState('Kho Khô');
+  const [manualWarehouse, setManualWH] = useState('Kho hàng khô');
   const [manualFloor, setManualFloor] = useState('1');
   const [manualPos, setManualPos] = useState('CT01');
   const [loading, setLoading] = useState(false);
@@ -712,13 +715,118 @@ export function Warehouse3D() {
   const [selectedItem, setSelectedItem] = useState<WaitingItem | undefined>(undefined);
   const [searchTerm, setSearchTerm] = useState('');
   const [previewPosition, setPreviewPosition] = useState<PreviewPosition | null>(null);
+  const [searchNotFound, setSearchNotFound] = useState('');
   // Phase 8: source container highlight for optimization (amber glow in 3D)
   const [optimizeHighlight, setOptimizeHighlight] = useState<string | undefined>(undefined);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [waitingRefreshKey, setWaitingRefreshKey] = useState(0);
+  // Damage confirmation modal state
+  const [damageTarget, setDamageTarget] = useState<{
+    containerCode: string;
+    cargoType: string;
+    containerType: string;
+    weight: string;
+    whName: string;
+    blockName: string;
+    zone: string;
+    slot: string;
+    floor: number;
+  } | null>(null);
+  const [damageLoading, setDamageLoading] = useState(false);
+  const [damageError, setDamageError] = useState<string | null>(null);
   const sceneRef = useRef<SceneHandle>(null);
   const overviewSceneRef = useRef<OverviewSceneHandle>(null);
   const navigate = useNavigate();
+
+  function handleDamageContainer(payload: {
+    containerCode: string;
+    cargoType: string;
+    containerType: string;
+    weight: string;
+    whName: string;
+    blockName: string;
+    zone: string;
+    slot: string;
+    floor: number;
+  }) {
+    setDamageTarget(payload);
+    setDamageError(null);
+  }
+
+  async function confirmDamage() {
+    if (!damageTarget) return;
+    setDamageLoading(true);
+    setDamageError(null);
+    try {
+      await reportDamage(damageTarget.containerCode);
+      addDamagedContainer({
+        code: damageTarget.containerCode,
+        cargoType: damageTarget.cargoType,
+        containerType: damageTarget.containerType,
+        weight: damageTarget.weight,
+        whType: 'damaged',
+        whName: 'Kho hỏng',
+        zone: damageTarget.zone,
+        floor: damageTarget.floor,
+        row: 0,
+        col: 0,
+        slot: damageTarget.slot,
+        importDate: new Date().toISOString(),
+        exportDate: '',
+        priority: 'Báo hỏng',
+        sourceWarehouse: damageTarget.whName,
+        blockName: damageTarget.blockName,
+      } as never);
+      toast.success(`Đã báo hỏng ${damageTarget.containerCode}`);
+      setDamageTarget(null);
+      setActiveWH('damaged');
+      setPanelMode(null);
+    } catch (e) {
+      setDamageError(e instanceof Error ? e.message : 'Báo hỏng thất bại');
+    } finally {
+      setDamageLoading(false);
+    }
+  }
+
+  function handleSearchSubmit() {
+    const kw = searchTerm.trim().toLowerCase();
+    if (!kw) {
+      setSearchNotFound('');
+      return;
+    }
+
+    const occupancyEntries = Array.from(getOccupancyData().entries());
+    const occMatch = occupancyEntries.find(([, occ]) => occ.containerCode?.toLowerCase().includes(kw));
+
+    if (!occMatch) {
+      const message = `Không thấy container: ${searchTerm.trim()}`;
+      setSearchNotFound(message);
+      setPreviewPosition(null);
+      toast.error(message);
+      return;
+    }
+
+    const [slotKey, occ] = occMatch;
+    const [whTypeRaw, zone, rowRaw, colRaw, tierRaw] = slotKey.split('/');
+    const row = Number(rowRaw) || 0;
+    const col = Number(colRaw) || 0;
+    const floor = Number(tierRaw) || occ.tier || 1;
+
+    setSearchNotFound('');
+    setActiveWH(whTypeRaw as WHType);
+    setPanelMode(null);
+    setPreviewPosition({
+      whType: whTypeRaw as WHType,
+      zone,
+      floor,
+      row,
+      col,
+      sizeType: occ.sizeType,
+      containerCode: occ.containerCode,
+    });
+    sceneRef.current?.focusOn(col * 4 + 6, row * 8 + 6);
+    toast.success(`Đã tìm thấy container: ${occ.containerCode}`);
+  }
 
   function handleZoneClick(zone: ZoneInfo) {
     setSelectedZone(zone);
@@ -795,9 +903,17 @@ export function Warehouse3D() {
           <div className="w3d-spacer" />
           <div className="w3d-search">
             <Search size={15} className="w3d-search-icon" />
-            <input type="text" placeholder="Nhập mã số Container..."
-              value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+            <input
+              type="text"
+              placeholder="Nhập mã số Container..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') handleSearchSubmit(); }}
+            />
           </div>
+          <button className="btn-primary w3d-import-btn" onClick={handleSearchSubmit}>
+            <Search size={17} /><span>Tìm</span>
+          </button>
           <button className="btn-primary w3d-import-btn" onClick={() => setPanelMode('import')}>
             <Plus size={17} /><span>Nhập kho</span>
           </button>
@@ -859,17 +975,32 @@ export function Warehouse3D() {
           ))}
         </div>
 
+        {searchNotFound && (
+          <div style={{ marginBottom: 12, padding: '10px 14px', borderRadius: 10, background: '#fef2f2', color: '#b91c1c', border: '1px solid #fecaca', fontSize: '0.85rem' }}>
+            {searchNotFound}
+          </div>
+        )}
+
         {/* ── Content row: 3D canvas + right panel ── */}
         <div className="w3d-content-row">
           <div className="w3d-canvas-wrap">
             {activeWH === 'overview' ? (
-              <OverviewScene ref={overviewSceneRef} onZoneClick={handleZoneClick}
+              <OverviewScene
+                ref={overviewSceneRef}
+                onZoneClick={handleZoneClick}
                 highlightId={searchTerm.trim() || optimizeHighlight}
-                previewPosition={previewPosition} />
+                previewPosition={previewPosition}
+                onDamageContainer={handleDamageContainer}
+              />
             ) : (
-              <WarehouseScene ref={sceneRef} warehouseType={activeWH} onZoneClick={handleZoneClick}
+              <WarehouseScene
+                ref={sceneRef}
+                warehouseType={activeWH}
+                onZoneClick={handleZoneClick}
                 highlightId={searchTerm.trim() || optimizeHighlight}
-                previewPosition={previewPosition} />
+                previewPosition={previewPosition}
+                onDamageContainer={handleDamageContainer}
+              />
             )}
             <div className="w3d-controls">
               <button className="ctrl-btn" aria-label="Zoom in" onClick={() => activeWH === 'overview' ? overviewSceneRef.current?.zoomIn() : sceneRef.current?.zoomIn()}>   <ZoomIn size={18} /></button>
@@ -909,6 +1040,61 @@ export function Warehouse3D() {
         {/* ── Legend ── */}
         <div className="w3d-legend-row"><Legend /></div>
       </div>
+
+      {/* ── Damage confirmation modal ── */}
+      {damageTarget && (
+        <div
+          className="mgmt-modal-overlay"
+          onClick={damageLoading ? undefined : () => setDamageTarget(null)}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+        >
+          <div onClick={(e) => e.stopPropagation()} style={{ background: '#fff', borderRadius: 12, padding: 24, minWidth: 320, maxWidth: 440, boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700, color: '#dc2626' }}>Xác nhận báo hỏng</h3>
+              <button onClick={() => setDamageTarget(null)} disabled={damageLoading} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b' }}><X size={18} /></button>
+            </div>
+
+            <p style={{ fontSize: '0.85rem', color: '#64748b', marginBottom: 16 }}>
+              Container sẽ được chuyển sang trạng thái <strong style={{ color: '#dc2626' }}>DAMAGED</strong> và di chuyển vào <strong>Kho hỏng</strong>.
+            </p>
+
+            {damageError && <p style={{ color: '#dc2626', fontSize: '0.8rem', marginBottom: 12, padding: '8px 12px', background: '#fef2f2', borderRadius: 6 }}>{damageError}</p>}
+
+            {[
+              ['Mã container', damageTarget.containerCode],
+              ['Loại hàng', damageTarget.cargoType],
+              ['Loại cont.', damageTarget.containerType],
+              ['Trọng lượng', damageTarget.weight],
+              ['Kho hiện tại', damageTarget.whName],
+              ['Zone', damageTarget.zone],
+              ['Vị trí', damageTarget.slot],
+              ['Tầng', String(damageTarget.floor)],
+            ].filter(([, v]) => v && v !== '—').map(([label, value]) => (
+              <div key={label} style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 0', borderBottom: '1px solid #f1f5f9', fontSize: '0.82rem' }}>
+                <span style={{ color: '#64748b' }}>{label}</span>
+                <span style={{ fontWeight: 600 }}>{value}</span>
+              </div>
+            ))}
+
+            <div style={{ display: 'flex', gap: 8, marginTop: 18 }}>
+              <button
+                onClick={() => setDamageTarget(null)}
+                disabled={damageLoading}
+                style={{ flex: 1, padding: '10px 0', borderRadius: 8, border: '1px solid #e5e7eb', background: '#fff', cursor: 'pointer', fontWeight: 600, fontSize: '0.85rem' }}
+              >
+                Hủy
+              </button>
+              <button
+                onClick={confirmDamage}
+                disabled={damageLoading}
+                style={{ flex: 1, padding: '10px 0', borderRadius: 8, border: 'none', background: '#dc2626', color: '#fff', cursor: 'pointer', fontWeight: 600, fontSize: '0.85rem' }}
+              >
+                {damageLoading ? 'Đang xử lý...' : 'Xác nhận báo hỏng'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </DashboardLayout>
   );
 }

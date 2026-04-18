@@ -87,6 +87,10 @@ export function OptimizationPanel({
     () => listContainersFromMap(occupancyMap, warehouseType),
     [occupancyMap, warehouseType],
   );
+  const swapCandidates = useMemo(
+    () => containers.filter((c) => c.containerId !== source?.containerId),
+    [containers, source?.containerId],
+  );
 
   const [step, setStep]               = useState<OptStep>('select');
   const [source, setSource]           = useState<ContainerEntry | null>(null);
@@ -103,19 +107,32 @@ export function OptimizationPanel({
     onClose();
   }
 
+  function resetRelocateState() {
+    setSource(null);
+    setSuggestions([]);
+    setSelected(null);
+    setError(null);
+    setLoading(false);
+    onPreviewChange(null);
+    onSourceHighlight(undefined);
+  }
+
+  function resetSwapState() {
+    setSwapTarget(null);
+    setError(null);
+    setLoading(false);
+    onSourceHighlight(undefined);
+  }
+
   function goBack() {
+    if (loading) return;
     setError(null);
     if (step === 'suggestions') {
       setStep('select');
-      setSource(null);
-      setSuggestions([]);
-      setSelected(null);
-      onPreviewChange(null);
-      onSourceHighlight(undefined);
+      resetRelocateState();
     } else if (step === 'swap-select') {
       setStep('select');
-      setSwapTarget(null);
-      onSourceHighlight(undefined);
+      resetSwapState();
     }
   }
 
@@ -361,27 +378,25 @@ export function OptimizationPanel({
             <p className="opt-hint">Chọn container B để hoán đổi vị trí với container A:</p>
 
             <div className="opt-list">
-              {containers
-                .filter((c) => c.containerId !== source?.containerId)
-                .map((ctn) => (
-                  <div
-                    key={ctn.containerId}
-                    className={`opt-item ${swapTarget?.containerId === ctn.containerId ? 'opt-item-selected' : ''}`}
-                    onClick={() => setSwapTarget(ctn)}
-                  >
-                    <div className="opt-item-info">
-                      <span className="opt-item-code">
-                        {ctn.containerCode || `CTN-${ctn.containerId}`}
-                      </span>
-                      <span className="opt-item-meta">
-                        {ctn.cargoType || '—'} · {ctn.zoneName} T{ctn.tier}
-                      </span>
-                    </div>
-                    {swapTarget?.containerId === ctn.containerId && (
-                      <span style={{ color: '#1e3a8a', fontWeight: 700, flexShrink: 0 }}>✓</span>
-                    )}
+              {swapCandidates.map((ctn) => (
+                <div
+                  key={ctn.containerId}
+                  className={`opt-item ${swapTarget?.containerId === ctn.containerId ? 'opt-item-selected' : ''}`}
+                  onClick={() => setSwapTarget(ctn)}
+                >
+                  <div className="opt-item-info">
+                    <span className="opt-item-code">
+                      {ctn.containerCode || `CTN-${ctn.containerId}`}
+                    </span>
+                    <span className="opt-item-meta">
+                      {ctn.cargoType || '—'} · {ctn.zoneName} T{ctn.tier}
+                    </span>
                   </div>
-                ))}
+                  {swapTarget?.containerId === ctn.containerId && (
+                    <span style={{ color: '#1e3a8a', fontWeight: 700, flexShrink: 0 }}>✓</span>
+                  )}
+                </div>
+              ))}
             </div>
 
             {swapTarget && (
